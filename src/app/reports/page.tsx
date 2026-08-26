@@ -26,7 +26,9 @@ import {
   ExternalLink,
   Users,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Percent,
+  Tag
 } from 'lucide-react';
 import { getReportsAction } from '@/lib/actions/reports';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
@@ -204,7 +206,7 @@ export default function ReportsPage() {
     setActiveTab(tab);
   };
 
-  // CSV Export Utility
+  // CSV Export Utility with Safe Formula Injection Sanitization and RPC Aliasing
   const handleExportCSV = () => {
     if (!reportData) return;
 
@@ -214,14 +216,13 @@ export default function ReportsPage() {
 
     switch (activeTab) {
       case 'invoices':
-        headers = ['Invoice Number', 'Customer', 'Date', 'Subtotal (₹)', 'Discount (₹)', 'GST (₹)', 'Total (₹)', 'Paid (₹)', 'Method', 'Status'];
-        rows = (reportData.invoices_list || []).map((inv: any) => [
+        headers = ['Invoice Number', 'Customer', 'Date', 'Subtotal (₹)', 'Discount (₹)', 'Total (₹)', 'Paid (₹)', 'Method', 'Status'];
+        rows = (reportData.invoices || reportData.invoices_list || []).map((inv: any) => [
           inv.invoice_number,
           inv.customer_name,
           new Date(inv.created_at).toLocaleString('en-IN'),
           inv.subtotal,
           inv.discount_amount,
-          Number(inv.cgst_amount || 0) + Number(inv.sgst_amount || 0),
           inv.final_total,
           inv.paid_amount,
           inv.primary_method,
@@ -230,7 +231,7 @@ export default function ReportsPage() {
         break;
       case 'expenses':
         headers = ['Date', 'Category', 'Amount (₹)', 'Payment Method', 'Notes'];
-        rows = (reportData.expenses_list || []).map((e: any) => [
+        rows = (reportData.expenses_list || reportData.expenses || []).map((e: any) => [
           new Date(e.created_at).toLocaleDateString('en-IN'),
           e.category,
           e.amount,
@@ -261,14 +262,13 @@ export default function ReportsPage() {
         ]);
         break;
       case 'credits':
-        headers = ['Customer Name', 'Phone', 'Total Spend (₹)', 'Total Paid (₹)', 'Pending Dues (₹)', 'Store Credit Balance (₹)'];
-        rows = (reportData.customer_credits || []).map((c: any) => [
+        headers = ['Customer Name', 'Phone', 'Total Spend (₹)', 'Total Paid (₹)', 'Pending Dues (₹)'];
+        rows = (reportData.credits || reportData.customer_credits || []).map((c: any) => [
           c.customer_name,
           c.phone || '',
           c.total_spend,
           c.total_paid,
-          c.pending_dues,
-          c.credit_balance || 0
+          c.pending_dues
         ]);
         break;
       case 'monthly_profit':
@@ -283,69 +283,73 @@ export default function ReportsPage() {
         ]);
         break;
       case 'profit_by_product':
-        headers = ['Product Name', 'Quantity Sold (Pcs)', 'Revenue (₹)', 'COGS (₹)', 'Gross Profit (₹)', 'Margin (%)'];
+        headers = ['Product Name', 'Variant', 'Quantity Sold (Pcs)', 'Revenue (₹)', 'COGS (₹)', 'Gross Profit (₹)', 'Margin (%)'];
         rows = (reportData.profit_by_product || []).map((p: any) => [
           p.product_name,
-          p.quantity_sold,
-          p.revenue,
+          p.variant_name || '',
+          p.quantity_sold || p.qty,
+          p.revenue || p.rev,
           p.cogs,
-          p.gross_profit,
-          p.revenue > 0 ? ((p.gross_profit / p.revenue) * 100).toFixed(1) + '%' : '0%'
+          p.profit ?? p.gross_profit,
+          p.margin_percent !== undefined ? `${p.margin_percent}%` : (p.revenue > 0 ? `${(((p.profit || 0) / p.revenue) * 100).toFixed(1)}%` : '0%')
         ]);
         break;
       case 'by_product':
-        headers = ['Product Name', 'Category', 'Quantity Sold (Pcs)', 'Revenue (₹)'];
-        rows = (reportData.sales_by_product || []).map((p: any) => [
+        headers = ['Product Name', 'Quantity Sold (Pcs)', 'Revenue (₹)'];
+        rows = (reportData.by_product || reportData.sales_by_product || []).map((p: any) => [
           p.product_name,
-          p.category_name,
-          p.quantity_sold,
-          p.revenue
+          p.quantity_sold || p.tot_qty,
+          p.total_sales || p.revenue
         ]);
         break;
       case 'by_category':
-        headers = ['Category Name', 'Total Items Sold', 'Total Revenue (₹)', 'Revenue Share (%)'];
-        rows = (reportData.sales_by_category || []).map((c: any) => [
+        headers = ['Category Name', 'Quantity Sold (Pcs)', 'Total Sales (₹)', 'Total Profit (₹)'];
+        rows = (reportData.by_category || reportData.sales_by_category || []).map((c: any) => [
           c.category_name,
-          c.items_sold,
-          c.revenue,
-          c.percentage + '%'
+          c.quantity_sold || c.items_sold || c.tot_qty,
+          c.total_sales || c.revenue,
+          c.total_profit || c.tot_prof || 0
         ]);
         break;
       case 'stock_cost':
-        headers = ['Variant Name', 'Product', 'Stock (Pcs)', 'Stock (Sets)', 'Cost Price (₹)', 'Total Valuation (₹)'];
-        rows = (reportData.stock_valuation || []).map((s: any) => [
+        headers = ['Variant Name', 'Product', 'Barcode', 'Stock (Pcs)', 'Cost Price (₹)', 'Total Valuation (₹)'];
+        rows = (reportData.stock_cost || reportData.stock_valuation || []).map((s: any) => [
           s.variant_name,
           s.product_name,
+          s.barcode || '',
           s.stock_quantity,
-          s.stock_sets,
           s.cost_price,
-          s.valuation
+          s.total_cost || s.valuation
         ]);
         break;
       case 'stock_moves':
         headers = ['Date & Time', 'Product & Variant', 'Type', 'Quantity Change (Pcs)', 'Notes'];
-        rows = (reportData.recent_stock_moves || []).map((sm: any) => [
+        rows = (reportData.stock_moves || reportData.recent_stock_moves || []).map((sm: any) => [
           new Date(sm.created_at).toLocaleString('en-IN'),
-          sm.variant_name,
+          `${sm.product_name ? sm.product_name + ' - ' : ''}${sm.variant_name || ''}`,
           sm.type,
           sm.quantity_change,
           sm.notes || ''
         ]);
         break;
       case 'stock_by_category':
-        headers = ['Category', 'Total Variants', 'Total Stock (Pcs)', 'Valuation at Cost (₹)'];
+        headers = ['Category', 'Total Stock (Pcs)', 'Valuation at Cost (₹)'];
         rows = (reportData.stock_by_category || []).map((sbc: any) => [
           sbc.category_name,
-          sbc.variant_count,
-          sbc.total_stock,
-          sbc.valuation
+          sbc.total_pieces || sbc.total_stock,
+          sbc.total_valuation || sbc.valuation
         ]);
         break;
     }
 
+    // Formula Injection Prevention: prepends ' to any cell starting with =, +, -, @
     const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))
+      ...rows.map(row => row.map(val => {
+        const strVal = String(val ?? '');
+        const sanitized = /^[=+\-@\t\r]/.test(strVal) ? `'${strVal}` : strVal;
+        return `"${sanitized.replace(/"/g, '""')}"`;
+      }).join(','))
     ].join('\n');
 
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -358,23 +362,47 @@ export default function ReportsPage() {
     document.body.removeChild(link);
   };
 
-  // Paginated Rows for Active Tab
+  // Paginated Rows for Active Tab with Complete Dual-Key RPC Aliasing
   const { currentTabRows, totalTabPages, paginatedTabRows } = useMemo(() => {
     let list: any[] = [];
     if (reportData) {
       switch (activeTab) {
-        case 'invoices': list = reportData.invoices_list || []; break;
-        case 'expenses': list = reportData.expenses_list || []; break;
-        case 'daily_sales': list = reportData.daily_sales || []; break;
-        case 'monthly_sales': list = reportData.monthly_sales || []; break;
-        case 'credits': list = reportData.customer_credits || []; break;
-        case 'monthly_profit': list = reportData.monthly_profit || []; break;
-        case 'profit_by_product': list = reportData.profit_by_product || []; break;
-        case 'by_product': list = reportData.sales_by_product || []; break;
-        case 'by_category': list = reportData.sales_by_category || []; break;
-        case 'stock_cost': list = reportData.stock_valuation || []; break;
-        case 'stock_moves': list = reportData.recent_stock_moves || []; break;
-        case 'stock_by_category': list = reportData.stock_by_category || []; break;
+        case 'invoices': 
+          list = reportData.invoices || reportData.invoices_list || []; 
+          break;
+        case 'expenses': 
+          list = reportData.expenses_list || reportData.expenses || []; 
+          break;
+        case 'daily_sales': 
+          list = reportData.daily_sales || []; 
+          break;
+        case 'monthly_sales': 
+          list = reportData.monthly_sales || []; 
+          break;
+        case 'credits': 
+          list = reportData.credits || reportData.customer_credits || []; 
+          break;
+        case 'monthly_profit': 
+          list = reportData.monthly_profit || []; 
+          break;
+        case 'profit_by_product': 
+          list = reportData.profit_by_product || []; 
+          break;
+        case 'by_product': 
+          list = reportData.by_product || reportData.sales_by_product || []; 
+          break;
+        case 'by_category': 
+          list = reportData.by_category || reportData.sales_by_category || []; 
+          break;
+        case 'stock_cost': 
+          list = reportData.stock_cost || reportData.stock_valuation || []; 
+          break;
+        case 'stock_moves': 
+          list = reportData.stock_moves || reportData.recent_stock_moves || []; 
+          break;
+        case 'stock_by_category': 
+          list = reportData.stock_by_category || []; 
+          break;
       }
     }
 
@@ -925,7 +953,7 @@ export default function ReportsPage() {
               </button>
             </div>
 
-            {/* Drilldown Body: Mobile Cards (< 640px) & Desktop Table (>= 640px) */}
+            {/* Drilldown Body: 12 Bespoke Mobile Cards (< 640px) & Desktop Table (>= 640px) */}
             <div className="min-h-[250px]">
               {paginatedTabRows.length === 0 ? (
                 <div className="py-16 text-center text-xs text-ink-muted font-medium">
@@ -933,9 +961,9 @@ export default function ReportsPage() {
                 </div>
               ) : (
                 <>
-                  {/* MOBILE CARDS VIEW (< 640px) */}
+                  {/* MOBILE BESPOKE CARDS VIEW (< 640px) - ZERO DATA LOSS */}
                   <div className="block sm:hidden space-y-2.5">
-                    {/* Invoices Mobile */}
+                    {/* 1. Invoices Mobile */}
                     {activeTab === 'invoices' && paginatedTabRows.map((inv: any) => (
                       <div 
                         key={inv.id}
@@ -949,7 +977,7 @@ export default function ReportsPage() {
                             </span>
                             <p className="text-xs text-ink-primary font-semibold">{inv.customer_name}</p>
                           </div>
-                          <span className={`font-bold font-mono text-xs ${inv.is_voided ? 'line-through text-red-500' : 'text-ink-primary'}`}>
+                          <span className={`font-bold font-mono text-sm ${inv.is_voided ? 'line-through text-red-500' : 'text-ink-primary'}`}>
                             {formatINR(inv.final_total)}
                           </span>
                         </div>
@@ -964,10 +992,16 @@ export default function ReportsPage() {
                             {inv.status}
                           </span>
                         </div>
+                        <div className="flex justify-between items-center text-[11px] text-ink-muted pt-1.5 border-t border-border/50">
+                          <span>Paid: <strong className="font-mono text-ink-primary">{formatINR(inv.paid_amount)}</strong></span>
+                          <span className="font-mono font-bold text-[10px] uppercase bg-surface px-2 py-0.5 rounded border border-border">
+                            {inv.primary_method}
+                          </span>
+                        </div>
                       </div>
                     ))}
 
-                    {/* Expenses Mobile */}
+                    {/* 2. Expenses Mobile */}
                     {activeTab === 'expenses' && paginatedTabRows.map((e: any) => (
                       <div 
                         key={e.id}
@@ -976,7 +1010,7 @@ export default function ReportsPage() {
                       >
                         <div className="flex justify-between items-start gap-2">
                           <span className="font-bold text-xs text-ink-primary">{e.category}</span>
-                          <span className="font-bold font-mono text-xs text-red-600">-{formatINR(e.amount)}</span>
+                          <span className="font-bold font-mono text-sm text-red-600">-{formatINR(e.amount)}</span>
                         </div>
                         <div className="flex justify-between items-center text-[11px] text-ink-muted">
                           <span>{new Date(e.created_at).toLocaleDateString('en-IN')}</span>
@@ -984,59 +1018,67 @@ export default function ReportsPage() {
                             {e.payment_method}
                           </span>
                         </div>
-                        {e.notes && <p className="text-[11px] text-ink-muted truncate">{e.notes}</p>}
+                        {e.notes && <p className="text-[11px] text-ink-muted pt-1 border-t border-border/50 truncate">{e.notes}</p>}
                       </div>
                     ))}
 
-                    {/* Daily Sales Mobile */}
+                    {/* 3. Daily Sales Mobile */}
                     {activeTab === 'daily_sales' && paginatedTabRows.map((d: any, idx: number) => (
-                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-1.5">
+                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-2">
                         <div className="flex justify-between items-start">
                           <span className="font-bold font-mono text-xs text-ink-primary">{d.date}</span>
-                          <span className="font-bold font-mono text-xs text-emerald-700">{formatINR(d.collected)}</span>
+                          <span className="font-bold font-mono text-sm text-emerald-700">{formatINR(d.collected)}</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-1 text-[11px] text-center bg-surface p-1.5 rounded-lg border border-border">
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-surface p-2 rounded-lg border border-border">
                           <div>
-                            <span className="text-[10px] text-ink-muted block">Invoices</span>
-                            <span className="font-bold font-mono">{d.invoice_count}</span>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Invoices</span>
+                            <span className="font-bold font-mono text-ink-primary">{d.invoice_count}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-ink-muted block">Gross</span>
-                            <span className="font-bold font-mono">{formatINR(d.gross_sales)}</span>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Gross Sales</span>
+                            <span className="font-bold font-mono text-ink-muted">{formatINR(d.gross_sales)}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-ink-muted block">Net Sales</span>
-                            <span className="font-bold font-mono text-ink-primary">{formatINR(d.net_sales)}</span>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Discount</span>
+                            <span className="font-bold font-mono text-red-600">{formatINR(d.discount)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Net Sales</span>
+                            <span className="font-bold font-mono text-accent">{formatINR(d.net_sales)}</span>
                           </div>
                         </div>
                       </div>
                     ))}
 
-                    {/* Monthly Sales Mobile */}
+                    {/* 4. Monthly Sales Mobile */}
                     {activeTab === 'monthly_sales' && paginatedTabRows.map((m: any, idx: number) => (
-                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-1.5">
+                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-2">
                         <div className="flex justify-between items-start">
-                          <span className="font-bold font-mono text-xs text-ink-primary">{m.month}</span>
-                          <span className="font-bold font-mono text-xs text-emerald-700">{formatINR(m.collected)}</span>
+                          <span className="font-bold text-xs text-ink-primary">{m.month}</span>
+                          <span className="font-bold font-mono text-sm text-emerald-700">{formatINR(m.collected)}</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-1 text-[11px] text-center bg-surface p-1.5 rounded-lg border border-border">
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-surface p-2 rounded-lg border border-border">
                           <div>
-                            <span className="text-[10px] text-ink-muted block">Invoices</span>
-                            <span className="font-bold font-mono">{m.invoice_count}</span>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Invoices</span>
+                            <span className="font-bold font-mono text-ink-primary">{m.invoice_count}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-ink-muted block">Gross</span>
-                            <span className="font-bold font-mono">{formatINR(m.gross_sales)}</span>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Gross Sales</span>
+                            <span className="font-bold font-mono text-ink-muted">{formatINR(m.gross_sales)}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-ink-muted block">Net Sales</span>
-                            <span className="font-bold font-mono text-ink-primary">{formatINR(m.net_sales)}</span>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Discount</span>
+                            <span className="font-bold font-mono text-red-600">{formatINR(m.discount)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Net Sales</span>
+                            <span className="font-bold font-mono text-accent">{formatINR(m.net_sales)}</span>
                           </div>
                         </div>
                       </div>
                     ))}
 
-                    {/* Customer Credits Mobile */}
+                    {/* 5. Customer Credits Mobile */}
                     {activeTab === 'credits' && paginatedTabRows.map((c: any) => (
                       <div 
                         key={c.customer_id}
@@ -1045,29 +1087,194 @@ export default function ReportsPage() {
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="font-bold text-xs text-ink-primary">{c.customer_name}</span>
+                            <span className="font-bold text-xs text-ink-primary flex items-center gap-1">
+                              {c.customer_name}
+                              <ExternalLink className="w-3 h-3 text-ink-muted" />
+                            </span>
                             <p className="text-[11px] font-mono text-ink-muted">{c.phone || 'No phone'}</p>
                           </div>
                           <div className="text-right">
                             <span className="text-[10px] uppercase text-amber-800 font-bold block">Dues</span>
-                            <span className="font-bold font-mono text-xs text-amber-800">{formatINR(c.pending_dues)}</span>
+                            <span className="font-bold font-mono text-sm text-amber-800">{formatINR(c.pending_dues)}</span>
                           </div>
                         </div>
-                        <div className="flex justify-between text-[11px] text-ink-muted pt-1 border-t border-border/60">
-                          <span>Spend: {formatINR(c.total_spend)}</span>
-                          <span>Store Credit: <strong className="font-mono text-emerald-700">{formatINR(c.credit_balance || 0)}</strong></span>
+                        <div className="flex justify-between text-[11px] text-ink-muted pt-1.5 border-t border-border/60">
+                          <span>Spend: <strong className="font-mono text-ink-primary">{formatINR(c.total_spend)}</strong></span>
+                          <span>Paid: <strong className="font-mono text-ink-primary">{formatINR(c.total_paid)}</strong></span>
                         </div>
                       </div>
                     ))}
 
-                    {/* Other Tabs Mobile Cards fallback */}
-                    {['monthly_profit', 'profit_by_product', 'by_product', 'by_category', 'stock_cost', 'stock_moves', 'stock_by_category'].includes(activeTab) && paginatedTabRows.map((row: any, idx: number) => (
-                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-1 text-xs">
-                        <div className="flex justify-between font-bold text-ink-primary">
-                          <span>{row.product_name || row.variant_name || row.category_name || row.month || row.type}</span>
-                          <span className="font-mono text-accent">{formatINR(row.net_profit || row.revenue || row.gross_profit || row.valuation || row.quantity_change)}</span>
+                    {/* 6. Monthly Profit Mobile */}
+                    {activeTab === 'monthly_profit' && paginatedTabRows.map((mp: any, idx: number) => (
+                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-2">
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-xs text-ink-primary">{mp.month}</span>
+                          <div className="text-right">
+                            <span className="text-[10px] uppercase font-bold text-ink-muted block">Net Profit</span>
+                            <span className={`font-bold font-mono text-sm ${Number(mp.net_profit) >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                              {formatINR(mp.net_profit)}
+                            </span>
+                          </div>
                         </div>
-                        {row.notes && <p className="text-[11px] text-ink-muted">{row.notes}</p>}
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-surface p-2 rounded-lg border border-border">
+                          <div>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Net Sales</span>
+                            <span className="font-bold font-mono text-ink-primary">{formatINR(mp.sales)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">COGS</span>
+                            <span className="font-bold font-mono text-ink-muted">{formatINR(mp.cogs)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Gross Profit</span>
+                            <span className="font-bold font-mono text-emerald-800">{formatINR(mp.gross_profit)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-ink-muted block uppercase font-bold">Expenses</span>
+                            <span className="font-bold font-mono text-red-600">-{formatINR(mp.expenses)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* 7. Profit by Product Mobile (Full Details: Qty, Rev, COGS, Profit, Margin) */}
+                    {activeTab === 'profit_by_product' && paginatedTabRows.map((p: any, idx: number) => {
+                      const grossProfit = p.profit ?? p.gross_profit ?? 0;
+                      const revenue = p.revenue || p.rev || 0;
+                      const margin = p.margin_percent !== undefined ? p.margin_percent : (revenue > 0 ? ((grossProfit / revenue) * 100).toFixed(1) : 0);
+
+                      return (
+                        <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-2">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <span className="font-bold text-xs text-ink-primary">{p.product_name}</span>
+                              {p.variant_name && <p className="text-[11px] font-mono text-ink-muted">{p.variant_name}</p>}
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] uppercase font-bold text-ink-muted block">Gross Profit</span>
+                              <span className="font-bold font-mono text-sm text-emerald-700">
+                                {formatINR(grossProfit)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs bg-surface p-2 rounded-lg border border-border">
+                            <div>
+                              <span className="text-[10px] text-ink-muted block uppercase font-bold">Qty Sold</span>
+                              <span className="font-bold font-mono text-ink-primary">{p.quantity_sold || p.qty} pcs</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-ink-muted block uppercase font-bold">Revenue</span>
+                              <span className="font-bold font-mono text-accent">{formatINR(revenue)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-ink-muted block uppercase font-bold">COGS</span>
+                              <span className="font-bold font-mono text-ink-muted">{formatINR(p.cogs)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-ink-muted block uppercase font-bold">Margin</span>
+                              <span className="font-bold font-mono text-purple-700">{margin}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* 8. By Product Volume Mobile */}
+                    {activeTab === 'by_product' && paginatedTabRows.map((p: any, idx: number) => (
+                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-1.5">
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-xs text-ink-primary">{p.product_name}</span>
+                          <span className="font-bold font-mono text-sm text-accent">{formatINR(p.total_sales || p.revenue)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-ink-muted pt-1 border-t border-border/50">
+                          <span className="inline-flex items-center gap-1 font-mono font-bold text-ink-primary">
+                            <Package className="w-3 h-3 text-ink-muted" />
+                            {p.quantity_sold || p.tot_qty} pcs sold
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* 9. By Category Mobile */}
+                    {activeTab === 'by_category' && paginatedTabRows.map((c: any, idx: number) => (
+                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-1.5">
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-xs text-ink-primary">{c.category_name}</span>
+                          <span className="font-bold font-mono text-sm text-accent">{formatINR(c.total_sales || c.revenue)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-ink-muted pt-1 border-t border-border/50">
+                          <span>Items Sold: <strong className="font-mono text-ink-primary">{c.quantity_sold || c.items_sold || c.tot_qty} pcs</strong></span>
+                          {c.total_profit !== undefined && (
+                            <span>Profit: <strong className="font-mono text-emerald-700">{formatINR(c.total_profit || c.tot_prof)}</strong></span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* 10. Stock Valuation Mobile */}
+                    {activeTab === 'stock_cost' && paginatedTabRows.map((s: any, idx: number) => (
+                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-1.5">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-xs text-ink-primary">{s.variant_name}</span>
+                            <p className="text-[11px] text-ink-muted">{s.product_name}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] uppercase font-bold text-ink-muted block">Valuation</span>
+                            <span className="font-bold font-mono text-sm text-accent">{formatINR(s.total_cost || s.valuation)}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-ink-muted pt-1.5 border-t border-border/50">
+                          <span>Stock: <strong className="font-mono text-ink-primary">{s.stock_quantity} pcs</strong></span>
+                          <span>Cost: <strong className="font-mono text-ink-muted">{formatINR(s.cost_price)}/pc</strong></span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* 11. Stock Moves Mobile */}
+                    {activeTab === 'stock_moves' && paginatedTabRows.map((sm: any, idx: number) => {
+                      const isPositive = Number(sm.quantity_change) > 0;
+                      return (
+                        <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-1.5">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <span className="font-bold text-xs text-ink-primary">
+                                {sm.product_name ? `${sm.product_name} - ` : ''}{sm.variant_name}
+                              </span>
+                              <p className="text-[10px] font-mono text-ink-muted mt-0.5">
+                                {new Date(sm.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className={`font-bold font-mono text-sm ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>
+                                {isPositive ? `+${sm.quantity_change}` : sm.quantity_change} pcs
+                              </span>
+                              <span className="block text-[10px] font-bold bg-surface px-1.5 py-0.5 rounded border border-border mt-0.5">
+                                {sm.type}
+                              </span>
+                            </div>
+                          </div>
+                          {sm.notes && <p className="text-[11px] text-ink-muted pt-1 border-t border-border/50 truncate">{sm.notes}</p>}
+                        </div>
+                      );
+                    })}
+
+                    {/* 12. Stock by Category Mobile */}
+                    {activeTab === 'stock_by_category' && paginatedTabRows.map((sbc: any, idx: number) => (
+                      <div key={idx} className="p-3.5 bg-row-alt/40 border border-border rounded-xl space-y-1.5">
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-xs text-ink-primary">{sbc.category_name}</span>
+                          <span className="font-bold font-mono text-sm text-accent">
+                            {formatINR(sbc.total_valuation || sbc.valuation)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-ink-muted pt-1 border-t border-border/50">
+                          <span>Total Stock: <strong className="font-mono text-ink-primary">{sbc.total_pieces || sbc.total_stock || 0} pcs</strong></span>
+                          {sbc.variant_count !== undefined && (
+                            <span>Variants: <strong className="font-mono">{sbc.variant_count}</strong></span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1075,7 +1282,7 @@ export default function ReportsPage() {
                   {/* DESKTOP TABLE VIEW (>= 640px) */}
                   <div className="hidden sm:block overflow-x-auto rounded-xl border border-border">
                     <table className="w-full text-left border-collapse text-xs">
-                      {/* TAB: INVOICES */}
+                      {/* TAB 1: INVOICES */}
                       {activeTab === 'invoices' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
@@ -1127,7 +1334,7 @@ export default function ReportsPage() {
                         </>
                       )}
 
-                      {/* TAB: EXPENSES */}
+                      {/* TAB 2: EXPENSES */}
                       {activeTab === 'expenses' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
@@ -1159,7 +1366,7 @@ export default function ReportsPage() {
                         </>
                       )}
 
-                      {/* TAB: DAILY SALES */}
+                      {/* TAB 3: DAILY SALES */}
                       {activeTab === 'daily_sales' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
@@ -1187,7 +1394,7 @@ export default function ReportsPage() {
                         </>
                       )}
 
-                      {/* TAB: MONTHLY SALES */}
+                      {/* TAB 4: MONTHLY SALES */}
                       {activeTab === 'monthly_sales' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
@@ -1215,7 +1422,7 @@ export default function ReportsPage() {
                         </>
                       )}
 
-                      {/* TAB: CREDITS */}
+                      {/* TAB 5: CREDITS */}
                       {activeTab === 'credits' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
@@ -1225,7 +1432,6 @@ export default function ReportsPage() {
                               <th className="py-3 px-4 text-right">Total Spend</th>
                               <th className="py-3 px-4 text-right">Total Paid</th>
                               <th className="py-3 px-4 text-right">Pending Dues</th>
-                              <th className="py-3 px-4 text-right">Store Credit</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
@@ -1243,14 +1449,13 @@ export default function ReportsPage() {
                                 <td className="py-3 px-4 text-right font-mono text-ink-muted">{formatINR(c.total_spend)}</td>
                                 <td className="py-3 px-4 text-right font-mono text-ink-muted">{formatINR(c.total_paid)}</td>
                                 <td className="py-3 px-4 text-right font-mono font-bold text-amber-800">{formatINR(c.pending_dues)}</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">{formatINR(c.credit_balance || 0)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </>
                       )}
 
-                      {/* TAB: MONTHLY PROFIT */}
+                      {/* TAB 6: MONTHLY PROFIT */}
                       {activeTab === 'monthly_profit' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
@@ -1271,19 +1476,22 @@ export default function ReportsPage() {
                                 <td className="py-3 px-4 text-right font-mono text-ink-muted">{formatINR(mp.cogs)}</td>
                                 <td className="py-3 px-4 text-right font-mono font-bold text-ink-primary">{formatINR(mp.gross_profit)}</td>
                                 <td className="py-3 px-4 text-right font-mono text-red-600">-{formatINR(mp.expenses)}</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">{formatINR(mp.net_profit)}</td>
+                                <td className={`py-3 px-4 text-right font-mono font-bold ${Number(mp.net_profit) >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                  {formatINR(mp.net_profit)}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </>
                       )}
 
-                      {/* TAB: PROFIT BY PRODUCT */}
+                      {/* TAB 7: PROFIT BY PRODUCT */}
                       {activeTab === 'profit_by_product' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
                             <tr>
                               <th className="py-3 px-4">Product Name</th>
+                              <th className="py-3 px-4">Variant</th>
                               <th className="py-3 px-4 text-center">Qty Sold</th>
                               <th className="py-3 px-4 text-right">Revenue</th>
                               <th className="py-3 px-4 text-right">COGS</th>
@@ -1292,29 +1500,35 @@ export default function ReportsPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
-                            {paginatedTabRows.map((p: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-row-alt/50 transition">
-                                <td className="py-3 px-4 font-bold text-ink-primary">{p.product_name}</td>
-                                <td className="py-3 px-4 text-center font-mono font-bold">{p.quantity_sold} pcs</td>
-                                <td className="py-3 px-4 text-right font-mono">{formatINR(p.revenue)}</td>
-                                <td className="py-3 px-4 text-right font-mono text-ink-muted">{formatINR(p.cogs)}</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">{formatINR(p.gross_profit)}</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">
-                                  {p.revenue > 0 ? ((p.gross_profit / p.revenue) * 100).toFixed(1) + '%' : '0%'}
-                                </td>
-                              </tr>
-                            ))}
+                            {paginatedTabRows.map((p: any, idx: number) => {
+                              const grossProfit = p.profit ?? p.gross_profit ?? 0;
+                              const revenue = p.revenue || p.rev || 0;
+                              const margin = p.margin_percent !== undefined ? p.margin_percent : (revenue > 0 ? ((grossProfit / revenue) * 100).toFixed(1) : 0);
+
+                              return (
+                                <tr key={idx} className="hover:bg-row-alt/50 transition">
+                                  <td className="py-3 px-4 font-bold text-ink-primary">{p.product_name}</td>
+                                  <td className="py-3 px-4 text-ink-muted font-mono">{p.variant_name || '—'}</td>
+                                  <td className="py-3 px-4 text-center font-mono font-bold">{p.quantity_sold || p.qty} pcs</td>
+                                  <td className="py-3 px-4 text-right font-mono">{formatINR(revenue)}</td>
+                                  <td className="py-3 px-4 text-right font-mono text-ink-muted">{formatINR(p.cogs)}</td>
+                                  <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">{formatINR(grossProfit)}</td>
+                                  <td className="py-3 px-4 text-right font-mono font-bold text-purple-700">
+                                    {margin}%
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </>
                       )}
 
-                      {/* TAB: BY PRODUCT */}
+                      {/* TAB 8: BY PRODUCT */}
                       {activeTab === 'by_product' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
                             <tr>
                               <th className="py-3 px-4">Product Name</th>
-                              <th className="py-3 px-4">Category</th>
                               <th className="py-3 px-4 text-center">Qty Sold</th>
                               <th className="py-3 px-4 text-right">Revenue</th>
                             </tr>
@@ -1323,16 +1537,15 @@ export default function ReportsPage() {
                             {paginatedTabRows.map((p: any, idx: number) => (
                               <tr key={idx} className="hover:bg-row-alt/50 transition">
                                 <td className="py-3 px-4 font-bold text-ink-primary">{p.product_name}</td>
-                                <td className="py-3 px-4 text-ink-muted">{p.category_name}</td>
-                                <td className="py-3 px-4 text-center font-mono font-bold">{p.quantity_sold} pcs</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(p.revenue)}</td>
+                                <td className="py-3 px-4 text-center font-mono font-bold">{p.quantity_sold || p.tot_qty} pcs</td>
+                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(p.total_sales || p.revenue)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </>
                       )}
 
-                      {/* TAB: BY CATEGORY */}
+                      {/* TAB 9: BY CATEGORY */}
                       {activeTab === 'by_category' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
@@ -1340,31 +1553,31 @@ export default function ReportsPage() {
                               <th className="py-3 px-4">Category</th>
                               <th className="py-3 px-4 text-center">Items Sold</th>
                               <th className="py-3 px-4 text-right">Revenue</th>
-                              <th className="py-3 px-4 text-right">Share</th>
+                              <th className="py-3 px-4 text-right">Profit</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
                             {paginatedTabRows.map((c: any, idx: number) => (
                               <tr key={idx} className="hover:bg-row-alt/50 transition">
                                 <td className="py-3 px-4 font-bold text-ink-primary">{c.category_name}</td>
-                                <td className="py-3 px-4 text-center font-mono">{c.items_sold} pcs</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(c.revenue)}</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-ink-muted">{c.percentage}%</td>
+                                <td className="py-3 px-4 text-center font-mono">{c.quantity_sold || c.items_sold || c.tot_qty} pcs</td>
+                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(c.total_sales || c.revenue)}</td>
+                                <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">{formatINR(c.total_profit || c.tot_prof || 0)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </>
                       )}
 
-                      {/* TAB: STOCK VALUATION */}
+                      {/* TAB 10: STOCK VALUATION */}
                       {activeTab === 'stock_cost' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
                             <tr>
                               <th className="py-3 px-4">Variant</th>
                               <th className="py-3 px-4">Product</th>
+                              <th className="py-3 px-4">Barcode</th>
                               <th className="py-3 px-4 text-center">Stock (Pcs)</th>
-                              <th className="py-3 px-4 text-center">Stock (Sets)</th>
                               <th className="py-3 px-4 text-right">Cost Price</th>
                               <th className="py-3 px-4 text-right">Valuation</th>
                             </tr>
@@ -1374,17 +1587,17 @@ export default function ReportsPage() {
                               <tr key={idx} className="hover:bg-row-alt/50 transition">
                                 <td className="py-3 px-4 font-bold text-ink-primary">{s.variant_name}</td>
                                 <td className="py-3 px-4 text-ink-muted">{s.product_name}</td>
+                                <td className="py-3 px-4 font-mono text-ink-muted">{s.barcode || '—'}</td>
                                 <td className="py-3 px-4 text-center font-mono font-bold text-ink-primary">{s.stock_quantity} pcs</td>
-                                <td className="py-3 px-4 text-center font-mono">{s.stock_sets} sets</td>
                                 <td className="py-3 px-4 text-right font-mono text-ink-muted">{formatINR(s.cost_price)}</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(s.valuation)}</td>
+                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(s.total_cost || s.valuation)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </>
                       )}
 
-                      {/* TAB: STOCK MOVES */}
+                      {/* TAB 11: STOCK MOVES */}
                       {activeTab === 'stock_moves' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
@@ -1397,34 +1610,38 @@ export default function ReportsPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
-                            {paginatedTabRows.map((sm: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-row-alt/50 transition">
-                                <td className="py-3 px-4 font-mono text-ink-muted">
-                                  {new Date(sm.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
-                                </td>
-                                <td className="py-3 px-4 font-bold text-ink-primary">{sm.variant_name}</td>
-                                <td className="py-3 px-4 text-center">
-                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-row-alt border border-border">
-                                    {sm.type}
-                                  </span>
-                                </td>
-                                <td className={`py-3 px-4 text-right font-mono font-bold ${Number(sm.quantity_change) > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                                  {Number(sm.quantity_change) > 0 ? `+${sm.quantity_change}` : sm.quantity_change} pcs
-                                </td>
-                                <td className="py-3 px-4 text-ink-muted truncate max-w-xs">{sm.notes || '—'}</td>
-                              </tr>
-                            ))}
+                            {paginatedTabRows.map((sm: any, idx: number) => {
+                              const isPositive = Number(sm.quantity_change) > 0;
+                              return (
+                                <tr key={idx} className="hover:bg-row-alt/50 transition">
+                                  <td className="py-3 px-4 font-mono text-ink-muted">
+                                    {new Date(sm.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                                  </td>
+                                  <td className="py-3 px-4 font-bold text-ink-primary">
+                                    {sm.product_name ? `${sm.product_name} - ` : ''}{sm.variant_name}
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-row-alt border border-border">
+                                      {sm.type}
+                                    </span>
+                                  </td>
+                                  <td className={`py-3 px-4 text-right font-mono font-bold ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>
+                                    {isPositive ? `+${sm.quantity_change}` : sm.quantity_change} pcs
+                                  </td>
+                                  <td className="py-3 px-4 text-ink-muted truncate max-w-xs">{sm.notes || '—'}</td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </>
                       )}
 
-                      {/* TAB: STOCK BY CATEGORY */}
+                      {/* TAB 12: STOCK BY CATEGORY */}
                       {activeTab === 'stock_by_category' && (
                         <>
                           <thead className="bg-row-alt text-ink-muted font-bold uppercase tracking-wider border-b border-border text-[11px]">
                             <tr>
                               <th className="py-3 px-4">Category</th>
-                              <th className="py-3 px-4 text-center">Variants Count</th>
                               <th className="py-3 px-4 text-center">Total Stock</th>
                               <th className="py-3 px-4 text-right">Valuation at Cost</th>
                             </tr>
@@ -1433,9 +1650,8 @@ export default function ReportsPage() {
                             {paginatedTabRows.map((sbc: any, idx: number) => (
                               <tr key={idx} className="hover:bg-row-alt/50 transition">
                                 <td className="py-3 px-4 font-bold text-ink-primary">{sbc.category_name}</td>
-                                <td className="py-3 px-4 text-center font-mono">{sbc.variant_count}</td>
-                                <td className="py-3 px-4 text-center font-mono font-bold">{sbc.total_stock} pcs</td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(sbc.valuation)}</td>
+                                <td className="py-3 px-4 text-center font-mono font-bold">{sbc.total_pieces || sbc.total_stock || 0} pcs</td>
+                                <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(sbc.total_valuation || sbc.valuation)}</td>
                               </tr>
                             ))}
                           </tbody>
