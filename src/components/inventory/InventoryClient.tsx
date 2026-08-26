@@ -36,18 +36,8 @@ import {
   updateProductAction,
   getProductStockHistoryAction
 } from '@/lib/actions/inventory'
+import { formatINR, formatDualQuantity } from '@/lib/formatters'
 import toast from 'react-hot-toast'
-
-const formatINR = (amount: number | string | null | undefined) => {
-  const num = typeof amount === 'number' ? amount : parseFloat(String(amount || 0));
-  const safeNum = isNaN(num) ? 0 : num;
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(safeNum);
-};
 
 export function InventoryClient({ variants, categories }: { variants: any[], categories: any[] }) {
   const router = useRouter();
@@ -372,7 +362,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                         </span>
 
                         {/* Color-Coded Stock Status Pill */}
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${
                           totalStock === 0
                             ? 'bg-red-50 text-red-700 border-red-200'
                             : totalStock <= 10
@@ -382,8 +372,8 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                           {totalStock === 0 
                             ? 'Out of Stock' 
                             : totalStock <= 10 
-                            ? `Low: ${totalStock} pcs` 
-                            : `${totalStock} pcs in stock`}
+                            ? `Low: ${formatDualQuantity(totalStock, p.pieces_per_set)}` 
+                            : `${formatDualQuantity(totalStock, p.pieces_per_set)} in stock`}
                         </span>
                       </div>
                     </div>
@@ -613,7 +603,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                     </span>
                   </h2>
                   <p className="text-xs text-ink-muted">
-                    Total Live Stock: <strong className="font-mono text-ink-primary">{historyProduct.totalStock} pcs</strong> across {historyProduct.variants.length} variant(s)
+                    Total Live Stock: <strong className="font-mono text-ink-primary">{formatDualQuantity(historyProduct.totalStock, historyProduct.pieces_per_set)}</strong> across {historyProduct.variants.length} variant(s)
                   </p>
                 </div>
               </div>
@@ -675,10 +665,6 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
               ) : (
                 filteredHistoryMovements.map((m: any) => {
                   const isPositive = Number(m.quantity_change) > 0;
-                  const absQty = Math.abs(Number(m.quantity_change));
-                  const piecesPerSet = Number(historyProduct.pieces_per_set) || 1;
-                  const sets = piecesPerSet > 1 ? Math.floor(absQty / piecesPerSet) : 0;
-                  const loose = piecesPerSet > 1 ? absQty % piecesPerSet : 0;
 
                   // Dynamic Badge Styling
                   let badgeStyle = 'bg-gray-100 text-gray-800 border-gray-200';
@@ -720,13 +706,8 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                         </div>
                         <div className="text-right font-mono">
                           <span className={`text-sm font-bold ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>
-                            {isPositive ? `+${m.quantity_change}` : m.quantity_change} pcs
+                            {formatDualQuantity(m.quantity_change, historyProduct.pieces_per_set, { showSign: true })}
                           </span>
-                          {piecesPerSet > 1 && (
-                            <span className="text-[10px] text-ink-muted block">
-                              ({sets} sets, {loose} loose)
-                            </span>
-                          )}
                         </div>
                       </div>
 

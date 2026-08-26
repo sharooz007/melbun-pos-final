@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getStockLedgerAction } from '@/lib/actions/inventory';
+import { formatDualQuantity } from '@/lib/formatters';
 
 interface LedgerItem {
   id: string;
@@ -230,7 +231,7 @@ export default function LedgerClient({
                     item.quantity_change > 0 ? 'text-green-600' :
                     item.quantity_change < 0 ? 'text-red-600' : 'text-gray-500'
                   }`}>
-                    {item.quantity_change > 0 ? `+${item.quantity_change}` : item.quantity_change} pcs
+                    {formatDualQuantity(item.quantity_change, item.variant?.product?.pieces_per_set, { showSign: true })}
                   </span>
                 </div>
 
@@ -348,7 +349,7 @@ export default function LedgerClient({
                       item.quantity_change > 0 ? 'text-green-600' :
                       item.quantity_change < 0 ? 'text-red-600' : 'text-gray-500'
                     }`}>
-                      {item.quantity_change > 0 ? `+${item.quantity_change}` : item.quantity_change}
+                      {formatDualQuantity(item.quantity_change, item.variant?.product?.pieces_per_set, { showSign: true })}
                     </td>
                     <td className="py-3 px-5 text-gray-600 max-w-xs truncate" title={item.notes || ''}>
                       {item.notes ? (() => {

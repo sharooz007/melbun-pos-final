@@ -33,17 +33,7 @@ import {
 import { getReportsAction } from '@/lib/actions/reports';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
 import { getReportDateRange, ReportPeriodPreset } from '@/lib/business-day';
-
-const formatINR = (amount: number | string | null | undefined) => {
-  const num = typeof amount === 'number' ? amount : parseFloat(String(amount || 0));
-  const safeNum = isNaN(num) ? 0 : num;
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(safeNum);
-};
+import { formatINR, formatDualQuantity } from '@/lib/formatters';
 
 type TabKey = 
   | 'invoices' 
@@ -1161,7 +1151,9 @@ export default function ReportsPage() {
                           <div className="grid grid-cols-2 gap-2 text-xs bg-surface p-2 rounded-lg border border-border">
                             <div>
                               <span className="text-[10px] text-ink-muted block uppercase font-bold">Qty Sold</span>
-                              <span className="font-bold font-mono text-ink-primary">{p.quantity_sold || p.qty} pcs</span>
+                              <span className="font-bold font-mono text-ink-primary">
+                                {formatDualQuantity(p.quantity_sold || p.qty, p.pieces_per_set)}
+                              </span>
                             </div>
                             <div>
                               <span className="text-[10px] text-ink-muted block uppercase font-bold">Revenue</span>
@@ -1190,7 +1182,7 @@ export default function ReportsPage() {
                         <div className="flex justify-between items-center text-[11px] text-ink-muted pt-1 border-t border-border/50">
                           <span className="inline-flex items-center gap-1 font-mono font-bold text-ink-primary">
                             <Package className="w-3 h-3 text-ink-muted" />
-                            {p.quantity_sold || p.tot_qty} pcs sold
+                            {formatDualQuantity(p.quantity_sold || p.tot_qty, p.pieces_per_set)} sold
                           </span>
                         </div>
                       </div>
@@ -1226,7 +1218,7 @@ export default function ReportsPage() {
                           </div>
                         </div>
                         <div className="flex justify-between items-center text-[11px] text-ink-muted pt-1.5 border-t border-border/50">
-                          <span>Stock: <strong className="font-mono text-ink-primary">{s.stock_quantity} pcs</strong></span>
+                          <span>Stock: <strong className="font-mono text-ink-primary">{formatDualQuantity(s.stock_quantity, s.pieces_per_set)}</strong></span>
                           <span>Cost: <strong className="font-mono text-ink-muted">{formatINR(s.cost_price)}/pc</strong></span>
                         </div>
                       </div>
@@ -1248,7 +1240,7 @@ export default function ReportsPage() {
                             </div>
                             <div className="text-right">
                               <span className={`font-bold font-mono text-sm ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>
-                                {isPositive ? `+${sm.quantity_change}` : sm.quantity_change} pcs
+                                {formatDualQuantity(sm.quantity_change, sm.pieces_per_set, { showSign: true })}
                               </span>
                               <span className="block text-[10px] font-bold bg-surface px-1.5 py-0.5 rounded border border-border mt-0.5">
                                 {sm.type}
@@ -1509,7 +1501,9 @@ export default function ReportsPage() {
                                 <tr key={idx} className="hover:bg-row-alt/50 transition">
                                   <td className="py-3 px-4 font-bold text-ink-primary">{p.product_name}</td>
                                   <td className="py-3 px-4 text-ink-muted font-mono">{p.variant_name || '—'}</td>
-                                  <td className="py-3 px-4 text-center font-mono font-bold">{p.quantity_sold || p.qty} pcs</td>
+                                  <td className="py-3 px-4 text-center font-mono font-bold">
+                                    {formatDualQuantity(p.quantity_sold || p.qty, p.pieces_per_set)}
+                                  </td>
                                   <td className="py-3 px-4 text-right font-mono">{formatINR(revenue)}</td>
                                   <td className="py-3 px-4 text-right font-mono text-ink-muted">{formatINR(p.cogs)}</td>
                                   <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">{formatINR(grossProfit)}</td>
@@ -1537,7 +1531,9 @@ export default function ReportsPage() {
                             {paginatedTabRows.map((p: any, idx: number) => (
                               <tr key={idx} className="hover:bg-row-alt/50 transition">
                                 <td className="py-3 px-4 font-bold text-ink-primary">{p.product_name}</td>
-                                <td className="py-3 px-4 text-center font-mono font-bold">{p.quantity_sold || p.tot_qty} pcs</td>
+                                <td className="py-3 px-4 text-center font-mono font-bold">
+                                  {formatDualQuantity(p.quantity_sold || p.tot_qty, p.pieces_per_set)}
+                                </td>
                                 <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(p.total_sales || p.revenue)}</td>
                               </tr>
                             ))}
@@ -1577,7 +1573,7 @@ export default function ReportsPage() {
                               <th className="py-3 px-4">Variant</th>
                               <th className="py-3 px-4">Product</th>
                               <th className="py-3 px-4">Barcode</th>
-                              <th className="py-3 px-4 text-center">Stock (Pcs)</th>
+                              <th className="py-3 px-4 text-center">Stock</th>
                               <th className="py-3 px-4 text-right">Cost Price</th>
                               <th className="py-3 px-4 text-right">Valuation</th>
                             </tr>
@@ -1588,7 +1584,9 @@ export default function ReportsPage() {
                                 <td className="py-3 px-4 font-bold text-ink-primary">{s.variant_name}</td>
                                 <td className="py-3 px-4 text-ink-muted">{s.product_name}</td>
                                 <td className="py-3 px-4 font-mono text-ink-muted">{s.barcode || '—'}</td>
-                                <td className="py-3 px-4 text-center font-mono font-bold text-ink-primary">{s.stock_quantity} pcs</td>
+                                <td className="py-3 px-4 text-center font-mono font-bold text-ink-primary">
+                                  {formatDualQuantity(s.stock_quantity, s.pieces_per_set)}
+                                </td>
                                 <td className="py-3 px-4 text-right font-mono text-ink-muted">{formatINR(s.cost_price)}</td>
                                 <td className="py-3 px-4 text-right font-mono font-bold text-accent">{formatINR(s.total_cost || s.valuation)}</td>
                               </tr>
@@ -1626,7 +1624,7 @@ export default function ReportsPage() {
                                     </span>
                                   </td>
                                   <td className={`py-3 px-4 text-right font-mono font-bold ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>
-                                    {isPositive ? `+${sm.quantity_change}` : sm.quantity_change} pcs
+                                    {formatDualQuantity(sm.quantity_change, sm.pieces_per_set, { showSign: true })}
                                   </td>
                                   <td className="py-3 px-4 text-ink-muted truncate max-w-xs">{sm.notes || '—'}</td>
                                 </tr>

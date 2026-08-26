@@ -7,14 +7,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ScanBarcode, Search, AlertCircle, Package, Camera, Loader2 } from 'lucide-react';
 import { searchVariantsAction } from '@/lib/actions/pos';
 import CameraScanner from '@/components/lookup/CameraScanner';
-
-const formatINR = (amount: number) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 2
-  }).format(amount);
-};
+import { formatINR, formatDualQuantity } from '@/lib/formatters';
 
 export default function LookupPage() {
   const [query, setQuery] = useState('');
@@ -186,11 +179,8 @@ export default function LookupPage() {
                   {formatINR(variant.price)}
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-700">
-                    Total: {variant.stock_quantity} pcs
-                  </span>
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-blue-50 text-blue-700">
-                    {variant.stock_sets} sets ({Math.max(0, variant.stock_quantity - (variant.stock_sets * (variant.pieces_per_set || 1)))} loose)
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    {formatDualQuantity(variant.stock_quantity, variant.pieces_per_set)} in stock
                   </span>
                 </div>
               </div>
