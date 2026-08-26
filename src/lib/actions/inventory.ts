@@ -225,3 +225,52 @@ export async function getStockLedgerAction(params?: GetStockLedgerParams) {
     };
   }
 }
+
+/**
+ * Fetches the complete chronological stock movement audit trail for a specific product and its variants.
+ */
+export async function getProductStockHistoryAction(productId: string) {
+  try {
+    const parsedId = z.string().uuid().safeParse(productId);
+    if (!parsedId.success) {
+      return { success: false, error: 'Invalid product ID format' };
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('stock_movements')
+      .select(`
+        id,
+        type,
+        quantity_change,
+        notes,
+        created_at,
+        variant:variants!inner (
+          id,
+          name,
+          barcode,
+          product_id,
+          product:products (
+            id,
+            name,
+            pieces_per_set
+          )
+        )
+      `)
+      .eq('variant.product_id', parsedId.data)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (err: unknown) {
+    return { 
+      success: false, 
+      error: err instanceof Error ? err.message : 'Failed to fetch product stock history' 
+    };
+  }
+}
+

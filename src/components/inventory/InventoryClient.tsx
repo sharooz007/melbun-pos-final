@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { 
   Search, 
   ChevronDown, 
@@ -14,12 +15,27 @@ import {
   Trash2, 
   Package,
   Barcode,
-  X
+  X,
+  Clock,
+  ExternalLink,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  RotateCcw,
+  Ban,
+  SlidersHorizontal,
+  History
 } from 'lucide-react'
 import { ReceiveStockModal } from './ReceiveStockModal'
 import { AddProductModal } from './AddProductModal'
 import { CategoriesModal } from './CategoriesModal'
-import { processStockArrivalAction, createProductAction, deleteProductAction, updateProductAction } from '@/lib/actions/inventory'
+import { 
+  processStockArrivalAction, 
+  createProductAction, 
+  deleteProductAction, 
+  updateProductAction,
+  getProductStockHistoryAction
+} from '@/lib/actions/inventory'
 import toast from 'react-hot-toast'
 
 const formatINR = (amount: number | string | null | undefined) => {
@@ -45,6 +61,12 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   
+  // Product Stock History Modal State
+  const [historyProduct, setHistoryProduct] = useState<any>(null);
+  const [historyMovements, setHistoryMovements] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyVariantFilter, setHistoryVariantFilter] = useState<string>('all');
+
   const toggleProduct = (productId: string) => { 
     setExpandedProducts(prev => { 
       const n = new Set(prev); 
@@ -68,103 +90,71 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
     setCurrentPage(1)
   }, [selectedCategoryId, debouncedSearch])
 
-  // Auto open receive stock modal if navigated with ?action=receive
+  // Auto-open receive stock modal if URL param matches
   useEffect(() => {
     if (searchParams.get('action') === 'receive') {
       setReceiveModalOpen(true);
     }
   }, [searchParams]);
 
-  // Master map of all products and their complete variants (unfiltered)
-  const masterProductsMap = useMemo(() => {
-    const productsMap = new Map<string, any>()
-    variants.forEach(v => {
-      const p = Array.isArray(v.product) ? v.product[0] : v.product
-      if (!p) return
-
-      if (!productsMap.has(p.id)) {
-        productsMap.set(p.id, {
-          id: p.id,
-          name: p.name,
-          category_id: p.category_id,
-          category_name: p.category?.name || 'Uncategorized',
-          pieces_per_set: p.pieces_per_set || 1,
-          totalStock: 0,
-          variants: []
-        })
-      }
-      const prod = productsMap.get(p.id)
-      prod.totalStock += Number(v.stock_quantity || 0)
-      prod.variants.push({
-        id: v.id,
-        name: v.name,
-        barcode: v.barcode,
-        cost_price: v.cost_price,
-        selling_price: v.selling_price,
-        stock_quantity: v.stock_quantity,
-        stock_sets: v.stock_sets
-      })
-    })
-    return productsMap
-  }, [variants])
-
-  // Group products by product_id for display (with category + search filtering)
-  const groupedProducts = useMemo(() => {
-    const productsMap = new Map<string, any>()
+  // Transform flat active variants into grouped product hierarchy
+  const { productsList, masterProductsMap } = useMemo(() => {
+    const map = new Map<string, any>();
     
     variants.forEach(v => {
-      const p = Array.isArray(v.product) ? v.product[0] : v.product
-      if (!p) return
-
-      // 1. Filter by category
-      if (selectedCategoryId !== 'all' && p.category_id !== selectedCategoryId) {
-        return
-      }
-
-      // 2. Filter by search query (product name, variant name, barcode)
-      if (debouncedSearch.trim()) {
-        const q = debouncedSearch.toLowerCase()
-        const matchesProduct = p.name?.toLowerCase().includes(q)
-        const matchesVariant = v.name?.toLowerCase().includes(q)
-        const matchesBarcode = v.barcode?.toLowerCase().includes(q)
-        if (!matchesProduct && !matchesVariant && !matchesBarcode) {
-          return
-        }
-      }
-
-      if (!productsMap.has(p.id)) {
-        productsMap.set(p.id, {
+      const p = v.product;
+      if (!p) return;
+      
+      if (!map.has(p.id)) {
+        map.set(p.id, {
           id: p.id,
           name: p.name,
           category_id: p.category_id,
-          category_name: p.category?.name || 'Uncategorized',
           pieces_per_set: p.pieces_per_set || 1,
+          variants: [],
           totalStock: 0,
-          variants: []
-        })
+          created_at: v.created_at
+        });
       }
+      
+      const prod = map.get(p.id);
+      prod.variants.push(v);
+      prod.totalStock += (Number(v.stock_quantity) || 0);
+      if (new Date(v.created_at) > new Date(prod.created_at)) {
+        prod.created_at = v.created_at;
+      }
+    });
 
-      const prod = productsMap.get(p.id)
-      prod.totalStock += Number(v.stock_quantity || 0)
-      prod.variants.push({
-        id: v.id,
-        name: v.name,
-        barcode: v.barcode,
-        cost_price: v.cost_price,
-        selling_price: v.selling_price,
-        stock_quantity: v.stock_quantity,
-        stock_sets: v.stock_sets
-      })
-    })
+    const list = Array.from(map.values()).sort((a, b) => {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
-    return Array.from(productsMap.values())
-  }, [variants, selectedCategoryId, debouncedSearch])
+    return { productsList: list, masterProductsMap: map };
+  }, [variants]);
 
-  const totalPages = Math.max(1, Math.ceil(groupedProducts.length / PAGE_SIZE));
+  // Filter products by category and live debounced search query
+  const filteredProducts = useMemo(() => {
+    return productsList.filter(p => {
+      const matchesCat = selectedCategoryId === 'all' || p.category_id === selectedCategoryId;
+      if (!matchesCat) return false;
+
+      if (!debouncedSearch.trim()) return true;
+      const q = debouncedSearch.toLowerCase().trim();
+      
+      const nameMatch = p.name.toLowerCase().includes(q);
+      const variantMatch = p.variants.some((v: any) => 
+        v.name.toLowerCase().includes(q) || (v.barcode && v.barcode.toLowerCase().includes(q))
+      );
+      
+      return nameMatch || variantMatch;
+    });
+  }, [productsList, selectedCategoryId, debouncedSearch]);
+
+  const totalPages = Math.ceil(filteredProducts.length / PAGE_SIZE) || 1;
   const paginatedProducts = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return groupedProducts.slice(start, start + PAGE_SIZE);
-  }, [groupedProducts, currentPage]);
+    return filteredProducts.slice(start, start + PAGE_SIZE);
+  }, [filteredProducts, currentPage]);
 
   const handleReceiveSubmit = async (data: any[]) => {
     const toastId = toast.loading('Receiving stock...');
@@ -227,6 +217,32 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
     setAddModalOpen(true)
   }
 
+  const openHistoryModal = async (product: any, initialVariantId?: string) => {
+    const fullProduct = masterProductsMap.get(product.id) || product;
+    setHistoryProduct(fullProduct);
+    setHistoryVariantFilter(initialVariantId || 'all');
+    setHistoryLoading(true);
+    setHistoryMovements([]);
+    try {
+      const res = await getProductStockHistoryAction(fullProduct.id);
+      if (res.success && res.data) {
+        setHistoryMovements(res.data);
+      } else {
+        toast.error(res.error || 'Failed to load stock movements');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Error loading stock history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // Filter movements by selected variant tab in modal
+  const filteredHistoryMovements = useMemo(() => {
+    if (historyVariantFilter === 'all') return historyMovements;
+    return historyMovements.filter(m => m.variant?.id === historyVariantFilter);
+  }, [historyMovements, historyVariantFilter]);
+
   return (
     <div className="space-y-5">
       {/* Top Search & Filter Bar */}
@@ -245,7 +261,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
             {searchQuery && (
               <button 
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary p-0.5 rounded-full"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary p-0.5 rounded-full cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -268,19 +284,27 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
           </div>
         </div>
 
-        {/* Action Buttons Row */}
+        {/* Action Buttons Row with Stock Ledger Shortcut */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
           <button 
             onClick={() => setCatModalOpen(true)}
-            className="flex-1 sm:flex-none px-3.5 py-2.5 bg-surface border border-border hover:bg-row-alt text-ink-primary text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition min-h-[40px]"
+            className="flex-1 sm:flex-none px-3.5 py-2.5 bg-surface border border-border hover:bg-row-alt text-ink-primary text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition min-h-[40px] cursor-pointer"
           >
             <Layers className="w-4 h-4 text-ink-muted" />
             <span>Categories</span>
           </button>
+
+          <Link
+            href="/inventory/ledger"
+            className="flex-1 sm:flex-none px-3.5 py-2.5 bg-surface border border-border hover:bg-row-alt text-ink-primary text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition min-h-[40px] cursor-pointer"
+          >
+            <Clock className="w-4 h-4 text-accent" />
+            <span>Stock Ledger</span>
+          </Link>
           
           <button 
             onClick={() => setReceiveModalOpen(true)}
-            className="flex-1 sm:flex-none px-3.5 py-2.5 bg-surface border border-border hover:bg-row-alt text-ink-primary text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition min-h-[40px]"
+            className="flex-1 sm:flex-none px-3.5 py-2.5 bg-surface border border-border hover:bg-row-alt text-ink-primary text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition min-h-[40px] cursor-pointer"
           >
             <ArrowDownToLine className="w-4 h-4 text-emerald-600" />
             <span>Receive Stock</span>
@@ -291,7 +315,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
               setEditingProduct(null)
               setAddModalOpen(true)
             }}
-            className="w-full sm:w-auto px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition min-h-[40px]"
+            className="w-full sm:w-auto px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition min-h-[40px] cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Add Product</span>
@@ -317,7 +341,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                   >
                     <button 
                       aria-label="Toggle variants"
-                      className="mt-1 text-ink-muted hover:text-ink-primary transition-transform p-1 rounded-lg hover:bg-row-alt"
+                      className="mt-1 text-ink-muted hover:text-ink-primary transition-transform p-1 rounded-lg hover:bg-row-alt cursor-pointer"
                     >
                       {isExpanded ? (
                         <ChevronDown className="w-5 h-5 text-accent" />
@@ -365,13 +389,23 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                     </div>
                   </div>
 
-                  {/* Right: Tactile 44px Touch Action Chips */}
+                  {/* Right: Tactile Action Chips (History, Edit, Delete) */}
                   <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                    <button 
+                      onClick={() => openHistoryModal(p)}
+                      title="View Stock Movement History"
+                      aria-label="View Stock Movement History"
+                      className="p-2 sm:px-3 sm:py-2 text-xs text-ink-primary hover:text-accent bg-surface border border-border hover:bg-row-alt rounded-xl font-bold flex items-center gap-1.5 shadow-2xs transition min-h-[38px] min-w-[38px] justify-center cursor-pointer"
+                    >
+                      <Clock className="w-4 h-4 text-accent" />
+                      <span className="hidden sm:inline">History</span>
+                    </button>
+
                     <button 
                       onClick={() => handleEditClick(p)}
                       title="Edit Product"
                       aria-label="Edit Product"
-                      className="p-2.5 sm:px-3 sm:py-2 text-xs text-ink-primary hover:text-accent bg-surface border border-border hover:bg-row-alt rounded-xl font-bold flex items-center gap-1.5 shadow-2xs transition min-h-[40px] min-w-[40px] justify-center"
+                      className="p-2 sm:px-3 sm:py-2 text-xs text-ink-primary hover:text-accent bg-surface border border-border hover:bg-row-alt rounded-xl font-bold flex items-center gap-1.5 shadow-2xs transition min-h-[38px] min-w-[38px] justify-center cursor-pointer"
                     >
                       <Pencil className="w-4 h-4 text-ink-muted hover:text-accent" />
                       <span className="hidden sm:inline">Edit</span>
@@ -381,7 +415,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                       onClick={() => handleOpenDeleteModal(p.id, p.name)}
                       title="Delete Product"
                       aria-label="Delete Product"
-                      className="p-2.5 sm:px-3 sm:py-2 text-xs text-red-600 bg-red-50/70 border border-red-200 hover:bg-red-100 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs transition min-h-[40px] min-w-[40px] justify-center"
+                      className="p-2 sm:px-3 sm:py-2 text-xs text-red-600 bg-red-50/70 border border-red-200 hover:bg-red-100 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs transition min-h-[38px] min-w-[38px] justify-center cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
                       <span className="hidden sm:inline">Delete</span>
@@ -409,15 +443,25 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                                   {v.barcode || 'No barcode'}
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="font-mono font-bold text-sm text-ink-primary">
-                                  {formatINR(v.selling_price)}
+                              <div className="text-right flex items-center gap-2">
+                                <div>
+                                  <div className="font-mono font-bold text-sm text-ink-primary">
+                                    {formatINR(v.selling_price)}
+                                  </div>
+                                  {isLoss && (
+                                    <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold">
+                                      Below Cost
+                                    </span>
+                                  )}
                                 </div>
-                                {isLoss && (
-                                  <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold">
-                                    Below Cost
-                                  </span>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => openHistoryModal(p, v.id)}
+                                  title="View Variant History"
+                                  className="p-1.5 text-accent hover:bg-accent/10 rounded-lg transition cursor-pointer"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
 
@@ -449,9 +493,10 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                             <th className="py-2.5 px-3">Barcode</th>
                             <th className="py-2.5 px-3 text-right">Cost Price</th>
                             <th className="py-2.5 px-3 text-right">Selling Price</th>
-                            <th className="py-2.5 px-3 text-center">Sets</th>
-                            <th className="py-2.5 px-3 text-center">Loose</th>
-                            <th className="py-2.5 px-3 text-center">Total Stock</th>
+                            <th className="py-2.5 px-3 text-center">Packaged Sets</th>
+                            <th className="py-2.5 px-3 text-center">Loose Pcs</th>
+                            <th className="py-2.5 px-3 text-center font-bold text-ink-primary">Total Stock</th>
+                            <th className="py-2.5 px-3 text-right">History</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -461,21 +506,33 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                             const isLoss = Number(v.cost_price) > 0 && Number(v.selling_price) < Number(v.cost_price);
 
                             return (
-                              <tr key={v.id} className="hover:bg-row-alt/50">
-                                <td className="py-2.5 px-3 font-bold text-ink-primary">{v.name}</td>
-                                <td className="py-2.5 px-3 font-mono text-ink-muted text-[11px]">{v.barcode || '—'}</td>
+                              <tr key={v.id} className="hover:bg-row-alt/50 transition-colors">
+                                <td className="py-2.5 px-3 font-semibold text-ink-primary">{v.name}</td>
+                                <td className="py-2.5 px-3 font-mono text-ink-muted">{v.barcode || '—'}</td>
                                 <td className="py-2.5 px-3 text-right font-mono text-ink-muted">{formatINR(v.cost_price)}</td>
                                 <td className="py-2.5 px-3 text-right font-mono font-bold text-ink-primary">
                                   {formatINR(v.selling_price)}
-                                  {isLoss && (
-                                    <span className="ml-1.5 text-[9px] bg-amber-100 text-amber-900 px-1 py-0.5 rounded font-bold">
-                                      Loss
-                                    </span>
-                                  )}
+                                  {isLoss && <span className="text-[10px] text-amber-700 block font-normal">Below Cost</span>}
                                 </td>
-                                <td className="py-2.5 px-3 text-center font-mono">{stockSets}</td>
-                                <td className="py-2.5 px-3 text-center font-mono">{loosePcs}</td>
-                                <td className="py-2.5 px-3 text-center font-mono font-black text-ink-primary">{v.stock_quantity || 0} pcs</td>
+                                <td className="py-2.5 px-3 text-center font-mono font-medium text-ink-primary">
+                                  {stockSets} sets
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-mono font-medium text-ink-primary">
+                                  {loosePcs} pcs
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-mono font-bold text-accent">
+                                  {v.stock_quantity || 0} pcs
+                                </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => openHistoryModal(p, v.id)}
+                                    title="View Variant Stock History"
+                                    className="p-1 text-ink-muted hover:text-accent hover:bg-row-alt rounded-lg transition cursor-pointer"
+                                  >
+                                    <Clock className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
                               </tr>
                             );
                           })}
@@ -488,85 +545,273 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
             );
           })}
 
-          {groupedProducts.length === 0 && (
-            <div className="p-10 text-center text-ink-muted text-sm space-y-2">
-              <Package className="w-8 h-8 text-ink-muted mx-auto stroke-1" />
-              <p className="font-semibold text-ink-primary">No matching products found</p>
-              <p className="text-xs">Try adjusting your search query or category filter.</p>
+          {filteredProducts.length === 0 && (
+            <div className="text-center py-12 px-4 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-row-alt border border-border flex items-center justify-center mx-auto text-ink-muted">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-semibold text-ink-primary">No products found</p>
+              <p className="text-xs text-ink-muted max-w-sm mx-auto">
+                Try adjusting your search terms or category filter, or click &quot;+ Add Product&quot; to create one.
+              </p>
             </div>
           )}
         </div>
-        
-        {/* Pagination Footer */}
-        <div className="p-3.5 sm:p-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 bg-row-alt/40">
-          <span className="text-xs text-ink-muted">
-            Showing {groupedProducts.length > 0 ? (currentPage - 1) * PAGE_SIZE + 1 : 0}-
-            {Math.min(currentPage * PAGE_SIZE, groupedProducts.length)} of {groupedProducts.length} products
-          </span>
 
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 border border-border bg-surface text-ink-primary rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-row-alt transition-colors flex items-center gap-1 min-h-[36px]"
-            >
-              <ChevronRight className="w-3.5 h-3.5 rotate-180" />
-              Previous
-            </button>
-            <span className="text-xs font-bold text-ink-primary px-2 font-mono">
-              {currentPage} / {totalPages}
+        {/* Pagination Bar */}
+        {filteredProducts.length > PAGE_SIZE && (
+          <div className="p-3.5 sm:p-4 bg-row-alt/30 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <span className="text-ink-muted font-medium">
+              Showing {(currentPage - 1) * PAGE_SIZE + 1} to {Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} of {filteredProducts.length} products
             </span>
-            <button 
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 border border-accent/20 text-accent hover:bg-accent/5 bg-surface rounded-xl text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1 min-h-[36px]"
-            >
-              Next
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="px-3 py-1.5 rounded-lg border border-border bg-surface text-ink-primary font-bold disabled:opacity-40 hover:bg-row-alt transition cursor-pointer"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1.5 font-mono font-bold text-ink-primary">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="px-3 py-1.5 rounded-lg border border-border bg-surface text-ink-primary font-bold disabled:opacity-40 hover:bg-row-alt transition cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
+      {/* PRODUCT STOCK MOVEMENT HISTORY MODAL with z-[200] */}
+      {historyProduct && (
+        <div 
+          className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto cursor-pointer animate-in fade-in duration-150"
+          onClick={(e) => { if (e.target === e.currentTarget) setHistoryProduct(null); }}
+        >
+          <div 
+            className="bg-surface w-full max-w-2xl rounded-2xl shadow-2xl p-5 sm:p-6 border border-border animate-in zoom-in-95 duration-150 cursor-default space-y-4 max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-start pb-3 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-accent/10 text-accent rounded-xl">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-ink-primary flex items-center gap-2">
+                    <span>{historyProduct.name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-md bg-row-alt border border-border font-normal text-ink-muted">
+                      {historyProduct.pieces_per_set} pcs/set
+                    </span>
+                  </h2>
+                  <p className="text-xs text-ink-muted">
+                    Total Live Stock: <strong className="font-mono text-ink-primary">{historyProduct.totalStock} pcs</strong> across {historyProduct.variants.length} variant(s)
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setHistoryProduct(null)} 
+                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Variant Filter Tabs */}
+            {historyProduct.variants.length > 1 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setHistoryVariantFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    historyVariantFilter === 'all'
+                      ? 'bg-accent text-white shadow-2xs'
+                      : 'bg-row-alt border border-border text-ink-muted hover:text-ink-primary'
+                  }`}
+                >
+                  All Variants ({historyMovements.length})
+                </button>
+                {historyProduct.variants.map((v: any) => {
+                  const count = historyMovements.filter(m => m.variant?.id === v.id).length;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setHistoryVariantFilter(v.id)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                        historyVariantFilter === v.id
+                          ? 'bg-accent text-white shadow-2xs'
+                          : 'bg-row-alt border border-border text-ink-muted hover:text-ink-primary'
+                      }`}
+                    >
+                      {v.name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Movement Timeline List */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 min-h-[220px]">
+              {historyLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-6 h-6 text-accent animate-spin" />
+                  <span className="text-xs text-ink-muted">Loading stock timeline...</span>
+                </div>
+              ) : filteredHistoryMovements.length === 0 ? (
+                <div className="py-12 text-center text-xs text-ink-muted space-y-1">
+                  <History className="w-8 h-8 mx-auto text-ink-muted/50 mb-2" />
+                  <p className="font-bold text-ink-primary">No stock movements recorded yet</p>
+                  <p>Stock adjustments, sales, and arrivals will appear here chronologically.</p>
+                </div>
+              ) : (
+                filteredHistoryMovements.map((m: any) => {
+                  const isPositive = Number(m.quantity_change) > 0;
+                  const absQty = Math.abs(Number(m.quantity_change));
+                  const piecesPerSet = Number(historyProduct.pieces_per_set) || 1;
+                  const sets = piecesPerSet > 1 ? Math.floor(absQty / piecesPerSet) : 0;
+                  const loose = piecesPerSet > 1 ? absQty % piecesPerSet : 0;
+
+                  // Dynamic Badge Styling
+                  let badgeStyle = 'bg-gray-100 text-gray-800 border-gray-200';
+                  let icon = <SlidersHorizontal className="w-3.5 h-3.5" />;
+                  if (m.type === 'ARRIVAL') {
+                    badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                    icon = <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />;
+                  } else if (m.type === 'SALE') {
+                    badgeStyle = 'bg-blue-50 text-blue-800 border-blue-200';
+                    icon = <TrendingDown className="w-3.5 h-3.5 text-blue-600" />;
+                  } else if (m.type === 'RETURN_RESTOCK') {
+                    badgeStyle = 'bg-teal-50 text-teal-800 border-teal-200';
+                    icon = <RotateCcw className="w-3.5 h-3.5 text-teal-600" />;
+                  } else if (m.type === 'RETURN_DAMAGE') {
+                    badgeStyle = 'bg-red-50 text-red-800 border-red-200';
+                    icon = <Ban className="w-3.5 h-3.5 text-red-600" />;
+                  } else if (m.type === 'VOID_RESTOCK') {
+                    badgeStyle = 'bg-purple-50 text-purple-800 border-purple-200';
+                    icon = <RotateCcw className="w-3.5 h-3.5 text-purple-600" />;
+                  } else if (m.type === 'INITIAL_STOCK') {
+                    badgeStyle = 'bg-indigo-50 text-indigo-800 border-indigo-200';
+                    icon = <Package className="w-3.5 h-3.5 text-indigo-600" />;
+                  } else if (m.type === 'MANUAL_ADJUST') {
+                    badgeStyle = 'bg-amber-50 text-amber-800 border-amber-200';
+                    icon = <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />;
+                  }
+
+                  return (
+                    <div key={m.id} className="p-3 bg-row-alt/50 rounded-xl border border-border space-y-1.5">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${badgeStyle}`}>
+                            {icon}
+                            <span>{m.type}</span>
+                          </span>
+                          <span className="text-xs font-bold text-ink-primary font-mono">
+                            {m.variant?.name}
+                          </span>
+                        </div>
+                        <div className="text-right font-mono">
+                          <span className={`text-sm font-bold ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>
+                            {isPositive ? `+${m.quantity_change}` : m.quantity_change} pcs
+                          </span>
+                          {piecesPerSet > 1 && (
+                            <span className="text-[10px] text-ink-muted block">
+                              ({sets} sets, {loose} loose)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center text-[11px] text-ink-muted pt-1 border-t border-border/50">
+                        <span className="font-mono">
+                          {new Date(m.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                        <span className="truncate max-w-xs text-ink-primary font-medium">
+                          {m.notes || '—'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Footer with Direct Link to Full Search */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-3 border-t border-border text-xs">
+              <Link
+                href={`/inventory/ledger?search=${encodeURIComponent(historyProduct.name)}`}
+                className="text-accent font-bold hover:underline flex items-center gap-1"
+                onClick={() => setHistoryProduct(null)}
+              >
+                <span>Open in Full Stock Ledger Search</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setHistoryProduct(null)}
+                className="w-full sm:w-auto px-4 py-2 bg-row-alt hover:bg-surface border border-border text-ink-primary font-bold rounded-xl transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Other Existing Modals */}
       <ReceiveStockModal 
         isOpen={isReceiveModalOpen} 
         onClose={() => setReceiveModalOpen(false)} 
         onSubmit={handleReceiveSubmit}
         variants={variants}
       />
-      
-      <AddProductModal
-        isOpen={isAddModalOpen}
+
+      <AddProductModal 
+        isOpen={isAddModalOpen} 
         onClose={() => {
           setAddModalOpen(false)
           setEditingProduct(null)
-        }}
+        }} 
         onSubmit={handleAddSubmit}
         categories={categories}
         initialData={editingProduct}
       />
-      
-      <CategoriesModal
-        isOpen={isCatModalOpen}
-        onClose={() => setCatModalOpen(false)}
+
+      <CategoriesModal 
+        isOpen={isCatModalOpen} 
+        onClose={() => setCatModalOpen(false)} 
         categories={categories}
       />
 
-      {/* Styled Product Delete Confirmation Modal with z-[200] */}
+      {/* Delete Confirmation Modal */}
       {deletingProduct && (
         <div 
-          className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
-          onClick={() => !isDeleting && setDeletingProduct(null)}
+          className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto cursor-pointer animate-in fade-in duration-150"
+          onClick={(e) => { if (e.target === e.currentTarget && !isDeleting) setDeletingProduct(null); }}
         >
           <div 
-            className="bg-surface border border-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 cursor-default"
+            className="bg-surface w-full max-w-md rounded-2xl shadow-2xl p-5 sm:p-6 border border-border animate-in zoom-in-95 duration-150 cursor-default space-y-4"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 text-red-600">
-              <AlertCircle className="w-6 h-6 shrink-0" />
-              <h3 className="text-base font-bold text-ink-primary">Delete &quot;{deletingProduct.name}&quot;?</h3>
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-ink-primary">Delete Product?</h3>
+                <p className="text-xs text-ink-muted font-bold">{deletingProduct.name}</p>
+              </div>
             </div>
-            
+
             <p className="text-xs text-ink-muted leading-relaxed">
               Are you sure you want to permanently delete this product and all its <strong className="text-ink-primary">{deletingProduct.totalVariants} variant(s)</strong>?
             </p>
@@ -587,7 +832,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                 type="button"
                 disabled={isDeleting}
                 onClick={() => setDeletingProduct(null)}
-                className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl disabled:opacity-50 transition"
+                className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl disabled:opacity-50 transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -595,7 +840,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                 type="button"
                 disabled={isDeleting}
                 onClick={handleConfirmDelete}
-                className="px-4 py-2.5 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl transition disabled:opacity-50 flex items-center gap-2 shadow-xs"
+                className="px-4 py-2.5 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl transition disabled:opacity-50 flex items-center gap-2 shadow-xs cursor-pointer"
               >
                 {isDeleting ? 'Deleting...' : 'Yes, Delete Product'}
               </button>
