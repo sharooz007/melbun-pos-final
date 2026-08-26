@@ -20,7 +20,9 @@ export default function CameraScanner({
   const [error, setError] = useState<string | null>(null);
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
   const [activeCamIndex, setActiveCamIndex] = useState<number>(0);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
+  const [isSwitching, setIsSwitching] = useState<boolean>(false);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isStartingRef = useRef<boolean>(false);
@@ -28,8 +30,12 @@ export default function CameraScanner({
   const lastScanTimeRef = useRef<number>(0);
   const lastScannedCodeRef = useRef<string>('');
 
-  const startScanner = useCallback(async (camIndex: number = 0) => {
+  const startScanner = useCallback(async (targetIndex?: number, targetFacingMode?: 'environment' | 'user') => {
+    if (isStartingRef.current) return;
     setError(null);
+    setIsSwitching(true);
+    isStartingRef.current = true;
+
     try {
       if (!scannerRef.current) {
         scannerRef.current = new Html5Qrcode("reader", {
@@ -47,10 +53,12 @@ export default function CameraScanner({
 
       const scanner = scannerRef.current;
       if (scanner.isScanning) {
-        await scanner.stop();
+        try {
+          await scanner.stop();
+        } catch (_) {}
+        // Give mobile hardware a moment to release camera sensor
+        await new Promise(res => setTimeout(res, 200));
       }
-
-      isStartingRef.current = true;
 
       // Discover available cameras
       let devices: { id: string; label: string }[] = [];
@@ -62,9 +70,17 @@ export default function CameraScanner({
         }
       } catch (_) {}
 
-      const cameraConfig = devices.length > 0 && devices[camIndex]
-        ? { deviceId: { exact: devices[camIndex].id } }
-        : { facingMode: "environment" };
+      const activeIdx = targetIndex !== undefined ? targetIndex : activeCamIndex;
+      const activeFacing = targetFacingMode !== undefined ? targetFacingMode : facingMode;
+
+      // Select camera configuration
+      let cameraConfig: any;
+      if (devices.length > 1 && devices[activeIdx]) {
+        // Use deviceId without strict exact constraint for broad mobile compatibility
+        cameraConfig = devices[activeIdx].id;
+      } else {
+        cameraConfig = { facingMode: activeFacing };
+      }
 
       await scanner.start(
         cameraConfig,
@@ -115,19 +131,27 @@ export default function CameraScanner({
       }
     } finally {
       isStartingRef.current = false;
+      if (isMountedRef.current) setIsSwitching(false);
     }
-  }, [onScan, continuous]);
+  }, [onScan, continuous, activeCamIndex, facingMode]);
 
-  const handleSwitchCamera = () => {
-    if (cameras.length <= 1 || isStartingRef.current) return;
-    const nextIdx = (activeCamIndex + 1) % cameras.length;
-    setActiveCamIndex(nextIdx);
-    startScanner(nextIdx);
+  const handleSwitchCamera = async () => {
+    if (isStartingRef.current || isSwitching) return;
+    
+    if (cameras.length > 1) {
+      const nextIdx = (activeCamIndex + 1) % cameras.length;
+      setActiveCamIndex(nextIdx);
+      await startScanner(nextIdx);
+    } else {
+      const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
+      setFacingMode(nextFacing);
+      await startScanner(undefined, nextFacing);
+    }
   };
 
   useEffect(() => {
     isMountedRef.current = true;
-    startScanner(0);
+    startScanner(0, 'environment');
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -165,17 +189,19 @@ export default function CameraScanner({
         </div>
         
         <div className="flex items-center gap-3">
-          {cameras.length > 1 && (
-            <button
-              onClick={handleSwitchCamera}
-              disabled={isStartingRef.current}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full text-xs font-semibold tracking-wider transition-colors disabled:opacity-50"
-              title="Switch camera"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Camera {activeCamIndex + 1}/{cameras.length}</span>
-            </button>
-          )}
+          <button
+            onClick={handleSwitchCamera}
+            disabled={isStartingRef.current || isSwitching}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full text-xs font-semibold tracking-wider transition-all disabled:opacity-50"
+            title="Switch camera"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSwitching ? 'animate-spin' : ''}`} />
+            <span>
+              {cameras.length > 1
+                ? `Camera ${activeCamIndex + 1}/${cameras.length}`
+                : facingMode === 'environment' ? 'Switch to Front' : 'Switch to Back'}
+            </span>
+          </button>
 
           <button 
             onClick={async () => {
