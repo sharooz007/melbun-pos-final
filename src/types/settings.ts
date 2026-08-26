@@ -1,0 +1,13 @@
+export interface StoreSettings {
+  id: string;
+  store_name: string;
+  tagline: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  gstin: string | null;
+  business_day_start_hour: number; // 0 to 23
+  timezone: string; // e.g. 'Asia/Kolkata'
+  created_at: string;
+  updated_at: string;
+}

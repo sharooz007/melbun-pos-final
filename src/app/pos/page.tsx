@@ -1,0 +1,1645 @@
+'use client'
+
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { 
+  Search, 
+  Trash2, 
+  Plus, 
+  Minus, 
+  User, 
+  CreditCard, 
+  Percent, 
+  IndianRupee,
+  CheckCircle,
+  AlertCircle,
+  X,
+  Wallet,
+  Download,
+  Loader2,
+  Camera,
+  Calendar,
+  Clock,
+  Edit3,
+  RotateCcw,
+  ArrowLeft
+} from 'lucide-react';
+import CameraScanner from '@/components/lookup/CameraScanner';
+import { searchVariantsAction } from '@/lib/actions/pos';
+import { processCheckoutAction, updateFullInvoiceAction } from '@/lib/actions/checkout';
+import { getCustomersListAction, getOrCreateCustomerAction } from '@/lib/actions/customers';
+import { getFullInvoiceAction } from '@/lib/actions/invoices';
+import { getStoreSettingsAction } from '@/lib/actions/settings';
+import { generateInvoicePDF } from '@/lib/pdf/generateInvoice';
+
+interface CartItem {
+  variant_id: string;
+  name: string;
+  sets_quantity: number;
+  loose_quantity: number;
+  price: number;
+  pieces_per_set: number;
+  stock_quantity?: number;
+  stock_sets?: number;
+}
+
+const round2 = (num: number): number => Math.round((num + Number.EPSILON) * 100) / 100;
+
+function POSContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editInvoiceIdParam = searchParams.get('editInvoiceId');
+
+  const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null);
+  const [editInvoiceNumber, setEditInvoiceNumber] = useState<string | null>(null);
+  const [isInitialLoadingInvoice, setIsInitialLoadingInvoice] = useState(false);
+
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [resolvedCustomerId, setResolvedCustomerId] = useState<string | null>(null);
+  const [customerCredit, setCustomerCredit] = useState<number>(0);
+  const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  
+  const [invoiceDateStr, setInvoiceDateStr] = useState<string>(''); // For backdating & editing timestamps
+  const [discountType, setDiscountType] = useState<'amount' | 'percent'>('amount');
+  const [discountValue, setDiscountValue] = useState<string>('');
+  const [roundOff, setRoundOff] = useState<string>('');
+  const [gstApplied, setGstApplied] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI' | 'CREDIT' | 'SPLIT' | 'STORE_CREDIT'>('CASH');
+  
+  const [splitCash, setSplitCash] = useState<string>('');
+  const [splitUpi, setSplitUpi] = useState<string>('');
+  const [splitCredit, setSplitCredit] = useState<string>('');
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  const [splitSaved, setSplitSaved] = useState(false);
+  const [splitError, setSplitError] = useState<string | null>(null);
+
+  const [amountPaidStr, setAmountPaidStr] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string, invoiceId?: string, invoiceNumber?: string } | null>(null);
+
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraStatusMessage, setCameraStatusMessage] = useState<string | null>(null);
+  const [isClearCartModalOpen, setIsClearCartModalOpen] = useState(false);
+
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Load existing invoice for full editing if editInvoiceIdParam is present
+  useEffect(() => {
+    if (!editInvoiceIdParam) {
+      setEditInvoiceId(null);
+      setEditInvoiceNumber(null);
+      return;
+    }
+
+    const loadInvoiceForEdit = async () => {
+      setIsInitialLoadingInvoice(true);
+      setStatus(null);
+      try {
+        const res = await getFullInvoiceAction(editInvoiceIdParam);
+        if (res.success && res.data) {
+          const inv = res.data;
+          if (inv.is_voided) {
+            setStatus({ type: 'error', msg: `Invoice #${inv.invoice_number} is voided. Please undo void before editing.` });
+            return;
+          }
+          if (inv.is_hidden) {
+            setStatus({ type: 'error', msg: `Invoice #${inv.invoice_number} has been permanently deleted.` });
+            return;
+          }
+
+          setEditInvoiceId(inv.id);
+          setEditInvoiceNumber(inv.invoice_number);
+
+          // 1. Format timestamp for datetime-local
+          if (inv.created_at) {
+            const d = new Date(inv.created_at);
+            const offset = d.getTimezoneOffset() * 60000;
+            const localISOTime = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+            setInvoiceDateStr(localISOTime);
+          }
+
+          // 2. Customer
+          if (inv.customers) {
+            setCustomerName(inv.customers.name || '');
+            setCustomerPhone(inv.customers.phone || '');
+            setResolvedCustomerId(inv.customers.id);
+            setCustomerCredit(Number(inv.customers.credit_balance || 0));
+          } else {
+            setCustomerName('');
+            setCustomerPhone('');
+            setResolvedCustomerId(null);
+            setCustomerCredit(0);
+          }
+
+          // 3. Financials
+          setDiscountType('amount');
+          setDiscountValue(inv.discount_amount > 0 ? inv.discount_amount.toString() : '');
+          setRoundOff(inv.round_off !== 0 ? inv.round_off.toString() : '');
+          setGstApplied(Boolean(inv.gst_applied));
+
+          // 4. Cart Items
+          if (inv.invoice_items && inv.invoice_items.length > 0) {
+            const loadedCart: CartItem[] = inv.invoice_items.map((it: any) => {
+              const variant = it.variants || {};
+              const pcsPerSet = it.pieces_per_set || variant.products?.pieces_per_set || 1;
+              const resolvedVariantId = it.variant_id || variant.id;
+              return {
+                variant_id: resolvedVariantId,
+                name: variant.products?.name ? `${variant.products.name} - ${variant.name}` : (variant.name || 'Item'),
+                price: Number(it.selling_price_snapshot || variant.selling_price || 0),
+                pieces_per_set: pcsPerSet,
+                sets_quantity: it.sets_quantity || 0,
+                loose_quantity: it.loose_quantity !== undefined ? it.loose_quantity : (it.quantity % pcsPerSet),
+                stock_quantity: (Number(variant.stock_quantity) || 0) + (Number(it.quantity) || 0),
+                stock_sets: (Number(variant.stock_sets) || 0) + (Number(it.sets_quantity) || 0)
+              };
+            });
+            setCart(loadedCart);
+          }
+
+          // 5. Payment details
+          if (inv.payments && inv.payments.length > 0) {
+            if (inv.payments.length === 1) {
+              const p = inv.payments[0];
+              if (p.method === 'STORE_CREDIT') {
+                setPaymentMethod('STORE_CREDIT');
+                setAmountPaidStr('');
+              } else if (p.method === 'UPI') {
+                setPaymentMethod('UPI');
+                setAmountPaidStr(p.amount.toString());
+              } else {
+                setPaymentMethod('CASH');
+                setAmountPaidStr(p.amount.toString());
+              }
+            } else {
+              setPaymentMethod('SPLIT');
+              let cAmt = 0, uAmt = 0, crAmt = 0;
+              inv.payments.forEach((p: any) => {
+                if (p.method === 'CASH') cAmt += Number(p.amount);
+                if (p.method === 'UPI') uAmt += Number(p.amount);
+                if (p.method === 'STORE_CREDIT') crAmt += Number(p.amount);
+              });
+              setSplitCash(cAmt > 0 ? cAmt.toString() : '');
+              setSplitUpi(uAmt > 0 ? uAmt.toString() : '');
+              setSplitCredit(crAmt > 0 ? crAmt.toString() : '');
+              setSplitSaved(true);
+            }
+          } else {
+            setPaymentMethod('CREDIT');
+            setAmountPaidStr('');
+          }
+        } else {
+          setStatus({ type: 'error', msg: res?.error || 'Failed to load invoice for editing' });
+        }
+      } catch (err: any) {
+        setStatus({ type: 'error', msg: err.message || 'Error loading invoice' });
+      } finally {
+        setIsInitialLoadingInvoice(false);
+      }
+    };
+
+    loadInvoiceForEdit();
+  }, [editInvoiceIdParam]);
+
+  const handleCameraScan = async (barcode: string) => {
+    if (!barcode) return;
+    try {
+      const res = await searchVariantsAction(barcode.trim());
+      if (res.success && res.data && res.data.length > 0) {
+        const exact = res.data.find((v: any) => 
+          (v.barcode && v.barcode.toLowerCase() === barcode.trim().toLowerCase()) ||
+          (v.sku && v.sku.toLowerCase() === barcode.trim().toLowerCase())
+        );
+        if (exact) {
+          handleAddToCart(exact);
+          if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate?.(100);
+          }
+          setCameraStatusMessage(`Added: ${exact.name}`);
+          setTimeout(() => setCameraStatusMessage(null), 1800);
+        } else {
+          if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate?.([100, 50, 100]);
+          }
+          setCameraStatusMessage(`No exact match for '${barcode}'`);
+          setTimeout(() => setCameraStatusMessage(null), 2500);
+        }
+      } else {
+        if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate?.([100, 50, 100]);
+        }
+        setCameraStatusMessage(`Barcode not found: ${barcode}`);
+        setTimeout(() => setCameraStatusMessage(null), 2500);
+      }
+    } catch (err) {
+      setCameraStatusMessage(`Scan error. Please retry.`);
+    }
+  };
+
+  useEffect(() => {
+    const query = (customerName || '').trim() || (customerPhone || '').trim();
+    const fetchCustomers = async () => {
+      if (!query || query.length < 2) {
+        setCustomerSuggestions([]);
+        return;
+      }
+      const res = await getCustomersListAction(query);
+      if (res.success && res.data) {
+        setCustomerSuggestions(res.data.slice(0, 5));
+        const exactPhoneMatch = res.data.find((c: any) => c.phone && c.phone.trim() === customerPhone.trim());
+        if (exactPhoneMatch && !resolvedCustomerId) {
+          setResolvedCustomerId(exactPhoneMatch.id);
+          setCustomerName(exactPhoneMatch.name);
+          setCustomerCredit(Number(exactPhoneMatch.credit_balance || 0));
+        }
+      }
+    };
+    
+    if (!resolvedCustomerId || customerSuggestions.length > 0) {
+      const timer = setTimeout(fetchCustomers, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [customerName, customerPhone, resolvedCustomerId, customerSuggestions.length]);
+
+  // Split Modal Escape Key Dismissal
+  useEffect(() => {
+    if (!isSplitModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSplitModalOpen(false);
+        setSplitError(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSplitModalOpen]);
+
+  const selectCustomer = (cust: any) => {
+    setCustomerName(cust.name);
+    setCustomerPhone(cust.phone || '');
+    setResolvedCustomerId(cust.id);
+    setCustomerCredit(Number(cust.credit_balance || 0));
+    setCustomerSuggestions([]);
+    setShowCustomerDropdown(false);
+  };
+
+  const isSubmittingRef = useRef(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!query.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      const res = await searchVariantsAction(query);
+      if (res.success && res.data) {
+        setSearchResults(res.data);
+      }
+      setIsSearching(false);
+    }, 250);
+  };
+
+  const handleSearchKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const q = (e.currentTarget.value || searchQuery).trim();
+      if (!q) return;
+
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      setSearchQuery('');
+      setIsSearching(true);
+
+      try {
+        const localMatch = searchResults.find(v => (v.barcode && v.barcode.toLowerCase() === q.toLowerCase()) || v.sku?.toLowerCase() === q.toLowerCase());
+        if (localMatch) {
+          handleAddToCart(localMatch);
+          setSearchResults([]);
+          return;
+        }
+
+        const res = await searchVariantsAction(q);
+        if (res.success && res.data && res.data.length > 0) {
+          const exact = res.data.find((v: any) => (v.barcode && v.barcode.toLowerCase() === q.toLowerCase()) || (v.sku && v.sku.toLowerCase() === q.toLowerCase()));
+          if (exact) {
+            handleAddToCart(exact);
+          } else if (res.data.length === 1 && ((res.data[0].barcode && res.data[0].barcode.toLowerCase() === q.toLowerCase()) || (res.data[0].sku && res.data[0].sku.toLowerCase() === q.toLowerCase()))) {
+            handleAddToCart(res.data[0]);
+          } else {
+            setSearchResults(res.data);
+          }
+        } else {
+          setSearchResults([]);
+          setStatus({ type: 'error', msg: `No product found matching barcode '${q}'` });
+        }
+      } finally {
+        setIsSearching(false);
+      }
+    }
+  };
+
+  const isSplitModalOpenRef = useRef(false);
+  useEffect(() => {
+    isSplitModalOpenRef.current = isSplitModalOpen;
+  }, [isSplitModalOpen]);
+
+  // Global Hardware USB Scanner Listener
+  useEffect(() => {
+    let scanBuffer = '';
+    let lastKeyTime = 0;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (isSplitModalOpenRef.current) return;
+
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (isInput) return;
+
+      const now = Date.now();
+      if (now - lastKeyTime > 150) {
+        scanBuffer = '';
+      }
+      lastKeyTime = now;
+
+      if (e.key === 'Enter') {
+        if (scanBuffer.length >= 3) {
+          e.preventDefault();
+          const barcode = scanBuffer.trim();
+          scanBuffer = '';
+          searchVariantsAction(barcode).then((res) => {
+            if (res.success && res.data && res.data.length > 0) {
+              const exact = res.data.find((v: any) => (v.barcode && v.barcode.toLowerCase() === barcode.toLowerCase()) || (v.sku && v.sku.toLowerCase() === barcode.toLowerCase()));
+              if (exact) {
+                handleAddToCart(exact);
+              } else {
+                setStatus({ type: 'error', msg: `No exact product match found for barcode '${barcode}'` });
+              }
+            } else {
+              setStatus({ type: 'error', msg: `No product found matching barcode '${barcode}'` });
+            }
+          });
+        }
+      } else if (e.key.length === 1) {
+        scanBuffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // BeforeUnload Guard
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isSubmittingRef.current || cart.length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [cart.length]);
+
+  const handleAddToCart = (variant: any) => {
+    setSearchResults([]);
+    setIsSearching(false);
+    setSearchQuery(prev => (prev === variant.barcode || prev === variant.name ? '' : prev));
+    setCart(prev => {
+      const exists = prev.find(i => i.variant_id === variant.variant_id);
+      if (exists) {
+        const canIncrementSets = (exists.stock_sets && exists.stock_sets > 0) || (variant.stock_sets && variant.stock_sets > 0);
+        return prev.map(i => {
+          if (i.variant_id === variant.variant_id) {
+            if (canIncrementSets) {
+              return { ...i, sets_quantity: i.sets_quantity + 1 };
+            } else {
+              return { ...i, loose_quantity: i.loose_quantity + 1 };
+            }
+          }
+          return i;
+        });
+      }
+      return [...prev, {
+        variant_id: variant.variant_id,
+        name: variant.product_name ? `${variant.product_name} - ${variant.name}` : (variant.name || 'Item'),
+        price: Number(variant.selling_price || variant.price || 0),
+        pieces_per_set: variant.pieces_per_set || 1,
+        sets_quantity: variant.stock_sets && variant.stock_sets > 0 ? 1 : 0,
+        loose_quantity: variant.stock_sets && variant.stock_sets > 0 ? 0 : 1,
+        stock_quantity: variant.stock_quantity,
+        stock_sets: variant.stock_sets
+      }];
+    });
+  };
+
+  const handleRemoveItem = (variantId: string) => {
+    setCart(prev => prev.filter(i => i.variant_id !== variantId));
+    setSplitSaved(false);
+  };
+
+  const subtotal = useMemo(() => {
+    return cart.reduce((sum, item) => {
+      const totalPcs = (item.sets_quantity * item.pieces_per_set) + item.loose_quantity;
+      return sum + (totalPcs * item.price);
+    }, 0);
+  }, [cart]);
+
+  const discountAmount = useMemo(() => {
+    const val = parseFloat(discountValue) || 0;
+    if (val <= 0) return 0;
+    if (discountType === 'percent') {
+      const clampedPct = Math.min(100, val);
+      return round2((subtotal * clampedPct) / 100);
+    }
+    return round2(Math.min(subtotal, val));
+  }, [subtotal, discountValue, discountType]);
+
+  const preGstTotal = Math.max(0, subtotal - discountAmount);
+
+  const { cgstAmount, sgstAmount } = useMemo(() => {
+    if (!gstApplied) return { cgstAmount: 0, sgstAmount: 0 };
+    const half = (preGstTotal * 0.025);
+    return { cgstAmount: round2(half), sgstAmount: round2(half) };
+  }, [gstApplied, preGstTotal]);
+
+  const roundOffAmount = useMemo(() => {
+    const raw = parseFloat(roundOff) || 0;
+    const maxNegative = -(preGstTotal + cgstAmount + sgstAmount);
+    return round2(Math.max(Math.max(-50, maxNegative), Math.min(50, raw)));
+  }, [roundOff, preGstTotal, cgstAmount, sgstAmount]);
+
+  const finalTotal = useMemo(() => {
+    const rawTotal = preGstTotal + cgstAmount + sgstAmount + roundOffAmount;
+    return round2(Math.max(0, rawTotal));
+  }, [preGstTotal, cgstAmount, sgstAmount, roundOffAmount]);
+
+  const prevFinalTotalRef = useRef(finalTotal);
+
+  // Set default amount paid when total changes or method changes
+  useEffect(() => {
+    if (paymentMethod === 'CASH' || paymentMethod === 'UPI') {
+      const currentPaid = parseFloat(amountPaidStr || '0');
+      const isAutoMatching = !amountPaidStr.trim() || Math.abs(currentPaid - prevFinalTotalRef.current) < 0.01;
+      if (isAutoMatching) {
+        setAmountPaidStr(finalTotal.toString());
+      }
+    } else {
+      setAmountPaidStr('');
+    }
+    prevFinalTotalRef.current = finalTotal;
+    setSplitSaved(false);
+  }, [finalTotal, paymentMethod, amountPaidStr]);
+
+  const handleUpdateItem = (variant_id: string, field: 'sets_quantity' | 'loose_quantity', value: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.variant_id === variant_id) {
+        const val = Math.max(0, isNaN(value) ? 0 : value);
+        return { ...item, [field]: val };
+      }
+      return item;
+    }));
+  };
+
+  const handleSaveSplit = () => {
+    setSplitError(null);
+    const cash = parseFloat(splitCash) || 0;
+    const upi = parseFloat(splitUpi) || 0;
+    const credit = parseFloat(splitCredit) || 0;
+    
+    if (cash < 0 || upi < 0 || credit < 0) {
+      setSplitError('Payment amounts cannot be negative.');
+      return;
+    }
+
+    if (credit > customerCredit) {
+      setSplitError(`Store credit amount (₹${credit.toFixed(2)}) exceeds customer available credit balance of ₹${customerCredit.toFixed(2)}.`);
+      return;
+    }
+
+    const total = round2(cash + upi + credit);
+    
+    if (total !== finalTotal) {
+      setSplitError(`Split total (₹${total.toFixed(2)}) must exactly equal the bill total (₹${finalTotal.toFixed(2)}).`);
+      return;
+    }
+    setSplitSaved(true);
+    setIsSplitModalOpen(false);
+  };
+
+  const handleDownloadPdf = async (invoiceId: string) => {
+    try {
+      setDownloadingPdf(true);
+      const [invRes, storeRes] = await Promise.all([
+        getFullInvoiceAction(invoiceId),
+        getStoreSettingsAction()
+      ]);
+      if (invRes.success && invRes.data) {
+        const store = storeRes?.success && storeRes.data ? storeRes.data : null;
+        const storeConfig = store ? {
+          storeName: store.store_name || undefined,
+          tagline: store.tagline || undefined,
+          addressLine1: store.address || undefined,
+          phone: store.phone || undefined,
+          email: store.email || undefined,
+          gstin: store.gstin || undefined
+        } : undefined;
+        generateInvoicePDF(invRes.data, { storeConfig });
+      } else {
+        alert(invRes?.error || 'Failed to load invoice details for PDF.');
+      }
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Error generating PDF');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const resetFormState = () => {
+    setCart([]);
+    setCustomerName('');
+    setCustomerPhone('');
+    setResolvedCustomerId(null);
+    setCustomerCredit(0);
+    setInvoiceDateStr('');
+    setDiscountValue('');
+    setRoundOff('');
+    setGstApplied(false);
+    setDiscountType('amount');
+    setPaymentMethod('CASH');
+    setAmountPaidStr('');
+    setSplitCash('');
+    setSplitUpi('');
+    setSplitCredit('');
+    setSplitSaved(false);
+    setEditInvoiceId(null);
+    setEditInvoiceNumber(null);
+  };
+
+  const handleCheckoutOrUpdate = async () => {
+    if (isSubmittingRef.current || loading || cart.length === 0) return;
+
+    const validCart = cart.filter(i => ((i.sets_quantity * i.pieces_per_set) + i.loose_quantity) > 0);
+    if (validCart.length === 0) {
+      setStatus({ type: 'error', msg: 'Please enter a valid quantity (sets or loose > 0) for at least one item in the cart.' });
+      return;
+    }
+
+    try {
+      isSubmittingRef.current = true;
+      setLoading(true);
+      setStatus(null);
+
+      // 1. Resolve Customer if name OR phone is provided
+      let finalCustomerId = resolvedCustomerId;
+      if (customerName.trim() || customerPhone.trim()) {
+        const custRes = await getOrCreateCustomerAction(customerName, customerPhone);
+        if (!custRes.success || !custRes.customer) {
+          setStatus({ type: 'error', msg: custRes.error || 'Failed to save customer' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        finalCustomerId = custRes.customer.id;
+        setResolvedCustomerId(finalCustomerId);
+      }
+
+      // 2. Validate Packaged Sets & Payment Rules
+      const hasOverSets = validCart.some(item => item.stock_sets !== undefined && item.sets_quantity > item.stock_sets);
+      if (hasOverSets) {
+        setStatus({ type: 'error', msg: 'One or more items in the cart exceed available packaged sets on hand.' });
+        setLoading(false);
+        isSubmittingRef.current = false;
+        return;
+      }
+
+      let payments: { amount: number, method: 'CASH' | 'UPI' | 'STORE_CREDIT' }[] = [];
+      const amountPaid = parseFloat(amountPaidStr) || 0;
+
+      if (finalTotal === 0) {
+        payments = [];
+      } else if (paymentMethod === 'SPLIT') {
+        const cashAmt = parseFloat(splitCash) || 0;
+        const upiAmt = parseFloat(splitUpi) || 0;
+        const credAmt = parseFloat(splitCredit) || 0;
+        const splitSum = round2(cashAmt + upiAmt + credAmt);
+
+        if (!splitSaved || Math.abs(splitSum - finalTotal) > 0.01) {
+          setStatus({ type: 'error', msg: 'Please complete and save the split payment (must equal invoice total).' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+
+        if (cashAmt > 0) payments.push({ amount: cashAmt, method: 'CASH' });
+        if (upiAmt > 0) payments.push({ amount: upiAmt, method: 'UPI' });
+        if (credAmt > 0) {
+          if (!finalCustomerId) {
+            setStatus({ type: 'error', msg: 'Customer is required when applying Store Credit in split payment.' });
+            setLoading(false);
+            isSubmittingRef.current = false;
+            return;
+          }
+          payments.push({ amount: credAmt, method: 'STORE_CREDIT' });
+        }
+      } else if (paymentMethod === 'STORE_CREDIT') {
+        if (!finalCustomerId) {
+          setStatus({ type: 'error', msg: 'Customer is required when paying with Store Credit.' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        if (customerCredit < finalTotal) {
+          setStatus({ type: 'error', msg: `Insufficient store credit balance (Available: ₹${customerCredit.toFixed(2)}, Bill: ₹${finalTotal.toFixed(2)}).` });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        payments = [{ amount: finalTotal, method: 'STORE_CREDIT' }];
+      } else if (paymentMethod === 'CREDIT') {
+        if (!finalCustomerId) {
+          setStatus({ type: 'error', msg: 'Customer is required for CREDIT sales.' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+      } else {
+        // CASH or UPI
+        if (amountPaid < 0) {
+          setStatus({ type: 'error', msg: 'Payment amount cannot be negative.' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        if (amountPaid > finalTotal) {
+          setStatus({ type: 'error', msg: `Amount paid cannot exceed invoice total of ₹${finalTotal.toFixed(2)}.` });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        if (amountPaid < finalTotal && !finalCustomerId) {
+          setStatus({ type: 'error', msg: 'Customer required for partial credit.' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        if (amountPaid > 0) {
+          payments = [{ amount: amountPaid, method: paymentMethod as 'CASH' | 'UPI' }];
+        }
+      }
+
+      // Convert timestamp to ISO UTC string if specified
+      let isoTimestamp: string | null = null;
+      if (invoiceDateStr.trim()) {
+        isoTimestamp = new Date(invoiceDateStr).toISOString();
+      }
+
+      if (editInvoiceId) {
+        // EXECUTE FULL INVOICE UPDATE
+        const res = await updateFullInvoiceAction({
+          invoice_id: editInvoiceId,
+          customer_id: finalCustomerId || null,
+          subtotal,
+          discount_amount: discountAmount,
+          round_off: roundOffAmount,
+          gst_applied: gstApplied,
+          cgst_amount: cgstAmount,
+          sgst_amount: sgstAmount,
+          final_total: finalTotal,
+          items: validCart.map(i => ({
+            variant_id: i.variant_id,
+            sets_quantity: i.sets_quantity,
+            loose_quantity: i.loose_quantity,
+            selling_price_snapshot: i.price
+          })),
+          payments,
+          created_at: isoTimestamp
+        });
+
+        if (!res?.success) {
+          setStatus({ type: 'error', msg: res?.error || 'Failed to update invoice' });
+        } else {
+          setStatus({ 
+            type: 'success', 
+            msg: `Invoice #${editInvoiceNumber} successfully updated and stock synchronized!`,
+            invoiceId: editInvoiceId,
+            invoiceNumber: editInvoiceNumber || undefined
+          });
+          resetFormState();
+          // Seamlessly redirect back to invoices
+          setTimeout(() => {
+            router.push('/invoices');
+          }, 1200);
+        }
+      } else {
+        // EXECUTE NEW CHECKOUT
+        const res = await processCheckoutAction({
+          customer_id: finalCustomerId || null,
+          subtotal,
+          discount_amount: discountAmount,
+          round_off: roundOffAmount,
+          gst_applied: gstApplied,
+          cgst_amount: cgstAmount,
+          sgst_amount: sgstAmount,
+          final_total: finalTotal,
+          items: validCart.map(i => ({
+            variant_id: i.variant_id,
+            sets_quantity: i.sets_quantity,
+            loose_quantity: i.loose_quantity,
+            selling_price_snapshot: i.price
+          })),
+          payments,
+          created_at: isoTimestamp
+        });
+
+        if (!res?.success) {
+          setStatus({ type: 'error', msg: res?.error || 'Checkout failed' });
+        } else {
+          setStatus({ 
+            type: 'success', 
+            msg: `Invoice ${res.data.invoice_number} generated successfully!`,
+            invoiceId: res.data.invoice_id,
+            invoiceNumber: res.data.invoice_number
+          });
+          resetFormState();
+        }
+      }
+    } catch (err: any) {
+      setStatus({ type: 'error', msg: err.message || 'An unexpected error occurred' });
+    } finally {
+      setLoading(false);
+      isSubmittingRef.current = false;
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-canvas overflow-hidden font-sans">
+      {/* EDITING INVOICE PROMINENT TOP BANNER */}
+      {editInvoiceId && (
+        <div className="bg-amber-600 text-white px-4 py-2.5 flex items-center justify-between shadow-md shrink-0 border-b border-amber-700 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <span className="p-1.5 bg-amber-700/80 rounded-lg">
+              <Edit3 className="w-5 h-5 text-amber-200" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm tracking-wide font-mono">EDITING INVOICE #{editInvoiceNumber}</span>
+                <span className="text-[11px] font-bold bg-amber-800 text-amber-100 px-2 py-0.5 rounded-full border border-amber-500">
+                  Total Editability Active
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-100 mt-0.5">
+                Modifying items, quantities, discounts, customer, or timestamp will atomically recalculate and adjust warehouse inventory.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              resetFormState();
+              router.push('/invoices');
+            }}
+            className="bg-white text-amber-900 px-3.5 py-1.5 text-xs font-bold rounded-lg hover:bg-amber-50 transition-colors shadow-xs flex items-center gap-1.5"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Cancel & Return to Invoices
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* LEFT SECTION: Search & Cart Table */}
+        <div className="flex-1 flex flex-col min-w-0 border-r border-border">
+          {/* Top Search Bar with Camera Scanner Button */}
+          <div className="p-4 sm:p-6 bg-surface border-b border-border flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted" />
+              <input 
+                ref={searchInputRef}
+                type="text"
+                disabled={loading || isInitialLoadingInvoice}
+                placeholder="Search product name or scan barcode..."
+                value={searchQuery}
+                onChange={e => handleSearchChange(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                className="w-full pl-12 pr-4 py-3 bg-row-alt border border-border rounded-[10px] text-[15px] focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+              />
+              {isSearching && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted font-medium">
+                  Searching...
+                </div>
+              )}
+              {/* Live Search Dropdown */}
+              {searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-surface border border-border rounded-[12px] shadow-lg max-h-72 overflow-y-auto z-50 divide-y divide-border">
+                  {searchResults.map(v => (
+                    <div 
+                      key={v.variant_id}
+                      onClick={() => handleAddToCart(v)}
+                      className="p-3 hover:bg-row-alt cursor-pointer flex justify-between items-center transition-colors"
+                    >
+                      <div>
+                        <div className="font-bold text-[14px] text-ink-primary flex items-center gap-1.5">
+                          {v.name}
+                          {Number(v.stock_quantity || 0) <= 0 && (
+                            <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                              Out of Stock
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[12px] text-ink-muted">Barcode: {v.barcode || 'N/A'} • {v.pieces_per_set} pcs/set</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-[14px] text-[#A83D24]">₹{v.price.toFixed(2)}</div>
+                        <div className="text-[11px] text-gray-500">{v.stock_sets} sets / {v.stock_quantity} pcs</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Camera Scanner Button */}
+            <button
+              type="button"
+              onClick={() => { setIsCameraOpen(true); setCameraStatusMessage(null); }}
+              disabled={loading || isInitialLoadingInvoice}
+              className="px-4 py-3 bg-[#8B0000] hover:bg-[#660000] text-white rounded-[10px] font-bold text-xs sm:text-sm flex items-center gap-2 transition shadow-xs disabled:opacity-50 shrink-0"
+              title="Scan Barcodes with Mobile Camera"
+            >
+              <Camera className="w-5 h-5" />
+              <span className="hidden sm:inline">Camera Scan</span>
+            </button>
+          </div>
+
+          {/* Cart Header & Clear Cart Action */}
+          <div className="px-6 py-3 border-b border-border bg-surface flex justify-between items-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">Cart Items ({cart.length})</span>
+            {cart.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsClearCartModalOpen(true)}
+                disabled={loading || isInitialLoadingInvoice}
+                className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+              >
+                Clear Cart
+              </button>
+            )}
+          </div>
+
+          {/* Cart Items List */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {isInitialLoadingInvoice ? (
+              <div className="h-full flex flex-col items-center justify-center text-ink-muted space-y-3">
+                <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+                <p className="text-sm font-medium">Loading invoice details into POS cart...</p>
+              </div>
+            ) : cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-ink-muted space-y-3">
+                <Search className="w-12 h-12 opacity-20" />
+                <p className="text-[16px] font-medium">Cart is empty</p>
+                <p className="text-[13px]">Scan barcodes or search products to begin checkout</p>
+              </div>
+            ) : (
+              <div className="border border-border rounded-[12px] overflow-hidden bg-surface shadow-xs">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-border bg-row-alt text-[12px] font-bold text-ink-muted uppercase tracking-wider">
+                      <th className="py-3 px-4">Item</th>
+                      <th className="py-3 px-4 w-36 text-center">Packaged Sets</th>
+                      <th className="py-3 px-4 w-36 text-center">Loose Pcs</th>
+                      <th className="py-3 px-4 w-28 text-right">Price</th>
+                      <th className="py-3 px-4 w-28 text-right">Total</th>
+                      <th className="py-3 px-4 w-12 text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border text-[14px]">
+                    {cart.map((item) => {
+                      const totalPcs = (item.sets_quantity * item.pieces_per_set) + item.loose_quantity;
+                      const itemTotal = totalPcs * item.price;
+                      const isOverSets = item.stock_sets !== undefined && item.sets_quantity > item.stock_sets;
+                      const isOverStock = item.stock_quantity !== undefined && totalPcs > item.stock_quantity;
+                      return (
+                        <tr key={item.variant_id} className="hover:bg-row-alt/50 transition-colors">
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-ink-primary">{item.name}</div>
+                            <div className="text-[12px] text-ink-muted mt-0.5">
+                              {item.pieces_per_set} pcs/set • {totalPcs} pcs total
+                            </div>
+                            {isOverSets && (
+                              <div className="text-[11px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded mt-1 mr-1 inline-block">
+                                ⚠️ Exceeds sets ({item.stock_sets} on hand)
+                              </div>
+                            )}
+                            {isOverStock && !isOverSets && (
+                              <div className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded mt-1 inline-block">
+                                ⚠️ Exceeds stock ({item.stock_quantity} pcs on hand)
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button 
+                                type="button"
+                                onClick={() => handleUpdateItem(item.variant_id, 'sets_quantity', item.sets_quantity - 1)}
+                                className="w-9 h-9 sm:w-7 sm:h-7 bg-row-alt hover:bg-surface border border-border rounded flex items-center justify-center text-ink-muted hover:text-ink-primary transition-colors"
+                              >
+                                <Minus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                              </button>
+                              <input 
+                                type="number"
+                                min="0"
+                                value={item.sets_quantity}
+                                onFocus={e => e.target.select()}
+                                onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                                onChange={e => handleUpdateItem(item.variant_id, 'sets_quantity', parseInt(e.target.value) || 0)}
+                                className="w-14 sm:w-12 text-center p-1.5 sm:p-1 bg-surface border border-border rounded font-mono font-medium text-base sm:text-[13px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                              />
+                              <button 
+                                type="button"
+                                onClick={() => handleUpdateItem(item.variant_id, 'sets_quantity', item.sets_quantity + 1)}
+                                className="w-9 h-9 sm:w-7 sm:h-7 bg-row-alt hover:bg-surface border border-border rounded flex items-center justify-center text-ink-muted hover:text-ink-primary transition-colors"
+                              >
+                                <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button 
+                                type="button"
+                                onClick={() => handleUpdateItem(item.variant_id, 'loose_quantity', item.loose_quantity - 1)}
+                                className="w-9 h-9 sm:w-7 sm:h-7 bg-row-alt hover:bg-surface border border-border rounded flex items-center justify-center text-ink-muted hover:text-ink-primary transition-colors"
+                              >
+                                <Minus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                              </button>
+                              <input 
+                                type="number"
+                                min="0"
+                                value={item.loose_quantity}
+                                onFocus={e => e.target.select()}
+                                onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                                onChange={e => handleUpdateItem(item.variant_id, 'loose_quantity', parseInt(e.target.value) || 0)}
+                                className="w-14 sm:w-12 text-center p-1.5 sm:p-1 bg-surface border border-border rounded font-mono font-medium text-base sm:text-[13px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                              />
+                              <button 
+                                type="button"
+                                onClick={() => handleUpdateItem(item.variant_id, 'loose_quantity', item.loose_quantity + 1)}
+                                className="w-9 h-9 sm:w-7 sm:h-7 bg-row-alt hover:bg-surface border border-border rounded flex items-center justify-center text-ink-muted hover:text-ink-primary transition-colors"
+                              >
+                                <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-right font-mono text-ink-muted">₹{item.price.toFixed(2)}</td>
+                          <td className="py-4 px-4 text-right font-mono font-bold text-ink-primary">₹{itemTotal.toFixed(2)}</td>
+                          <td className="py-4 px-4 text-center">
+                            <button 
+                              onClick={() => handleRemoveItem(item.variant_id)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                              title="Remove line item"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT SECTION: Customer, Totals & Checkout Panel */}
+        <div className="w-[420px] bg-surface flex flex-col shrink-0">
+          <div className="p-6 border-b border-border flex items-center justify-between">
+            <h2 className="text-[18px] font-bold text-ink-primary">
+              {editInvoiceId ? 'Edit Invoice Details' : 'Sale Summary'}
+            </h2>
+            {editInvoiceId && (
+              <span className="text-xs font-mono font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-300">
+                #{editInvoiceNumber}
+              </span>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto flex flex-col justify-between">
+            <div className="p-6 space-y-6">
+              {/* Checkout Status Toast / Banner */}
+              {status && (
+                <div className={`p-4 rounded-xl flex flex-col gap-2 border ${
+                  status.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {status.type === 'error' ? <AlertCircle className="w-5 h-5 flex-shrink-0" /> : <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
+                      <span className="text-xs font-bold">{status.msg}</span>
+                    </div>
+                    <button onClick={() => setStatus(null)} className="text-gray-400 hover:text-gray-600">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {status.invoiceId && (
+                    <button
+                      onClick={() => handleDownloadPdf(status.invoiceId!)}
+                      disabled={downloadingPdf}
+                      className="mt-1 flex items-center justify-center gap-2 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
+                    >
+                      {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                      Download Invoice PDF ({status.invoiceNumber})
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Customer Details */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-[13px] font-bold text-ink-primary flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-ink-muted" />
+                    Customer
+                  </label>
+                  {resolvedCustomerId && (
+                    <span className="text-[11px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-200">
+                      Linked Account
+                    </span>
+                  )}
+                </div>
+
+                {/* Customer Search / Name & Phone Inputs */}
+                <div className="relative space-y-2">
+                  <input 
+                    type="text" 
+                    placeholder="Customer Name (Optional for cash)" 
+                    value={customerName} 
+                    disabled={loading || isInitialLoadingInvoice}
+                    onChange={e => {
+                      setCustomerName(e.target.value);
+                      setResolvedCustomerId(null);
+                      setCustomerCredit(0);
+                      if (paymentMethod === 'STORE_CREDIT') setPaymentMethod('CASH');
+                      if (paymentMethod === 'SPLIT') {
+                        setSplitCredit('');
+                        setSplitSaved(false);
+                      }
+                      setShowCustomerDropdown(true);
+                    }}
+                    onFocus={() => setShowCustomerDropdown(true)}
+                    className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                  />
+
+                  <input 
+                    type="text" 
+                    placeholder="Phone (Optional for cash)" 
+                    value={customerPhone} 
+                    disabled={loading || isInitialLoadingInvoice}
+                    onChange={e => {
+                      setCustomerPhone(e.target.value);
+                      setShowCustomerDropdown(true);
+                      const trimmed = e.target.value.trim();
+                      if (!trimmed) {
+                        setResolvedCustomerId(null);
+                        setCustomerCredit(0);
+                        if (paymentMethod === 'STORE_CREDIT' || paymentMethod === 'SPLIT') {
+                          setPaymentMethod('CASH');
+                          setSplitCredit('');
+                          setSplitSaved(false);
+                        }
+                        return;
+                      }
+                      const matched = customerSuggestions.find(c => c.phone && c.phone.trim() === trimmed);
+                      if (matched) {
+                        setResolvedCustomerId(matched.id);
+                        setCustomerName(matched.name);
+                        setCustomerCredit(Number(matched.credit_balance || 0));
+                      } else {
+                        setResolvedCustomerId(null);
+                        setCustomerCredit(0);
+                        if (paymentMethod === 'STORE_CREDIT') setPaymentMethod('CASH');
+                        if (paymentMethod === 'SPLIT') {
+                          setSplitCredit('');
+                          setSplitSaved(false);
+                        }
+                      }
+                    }}
+                    onFocus={() => setShowCustomerDropdown(true)}
+                    className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                  />
+
+                  {showCustomerDropdown && customerSuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-[8px] shadow-lg max-h-48 overflow-y-auto z-50 divide-y divide-border">
+                      {customerSuggestions.map(cust => (
+                        <div 
+                          key={cust.id} 
+                          onClick={() => selectCustomer(cust)}
+                          className="p-2.5 hover:bg-row-alt cursor-pointer flex justify-between items-center transition-colors"
+                        >
+                          <div>
+                            <p className="font-bold text-[13px] text-ink-primary">{cust.name}</p>
+                            <p className="text-[11px] text-ink-muted">{cust.phone || 'No phone'}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            {Number(cust.credit_balance || 0) > 0 && (
+                              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                Wallet: ₹{Number(cust.credit_balance).toFixed(2)}
+                              </span>
+                            )}
+                            {Number(cust.pending_dues || 0) > 0 && (
+                              <span className="text-[11px] font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md">
+                                Dues: ₹{Number(cust.pending_dues).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {customerCredit > 0 && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-emerald-700" />
+                      <div>
+                        <p className="text-xs font-bold text-emerald-900">Available Store Credit</p>
+                        <p className="text-[11px] text-emerald-700 font-mono">₹{customerCredit.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    {paymentMethod !== 'STORE_CREDIT' && paymentMethod !== 'SPLIT' && (
+                      <button
+                        type="button"
+                        disabled={loading || isInitialLoadingInvoice}
+                        onClick={() => setPaymentMethod('STORE_CREDIT')}
+                        className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                      >
+                        Use Credit
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* INVOICE DATE & TIME (Backdating & Retroactive Timestamp Selector) */}
+              <div className="space-y-2 pt-4 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <label className="text-[13px] font-bold text-ink-primary flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-ink-muted" />
+                    Invoice Date & Time
+                  </label>
+                  {invoiceDateStr && (
+                    <button
+                      type="button"
+                      disabled={loading || isInitialLoadingInvoice}
+                      onClick={() => setInvoiceDateStr('')}
+                      className="text-[11px] font-bold text-[#A83D24] hover:underline"
+                    >
+                      Reset to Real-time (Now)
+                    </button>
+                  )}
+                </div>
+                <input 
+                  type="datetime-local"
+                  value={invoiceDateStr}
+                  disabled={loading || isInitialLoadingInvoice}
+                  onChange={e => setInvoiceDateStr(e.target.value)}
+                  className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50 font-mono"
+                />
+                {invoiceDateStr ? (
+                  <p className="text-[11px] text-amber-700 font-medium bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    ⚡ {editInvoiceId ? 'Retroactive Timestamp:' : 'Backdating:'} This invoice will be recorded at {new Date(invoiceDateStr).toLocaleString('en-IN')}.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-ink-muted">
+                    Default: Real-time current date & time ({new Date().toLocaleDateString('en-IN')}).
+                  </p>
+                )}
+              </div>
+
+              {/* Discount & Round Off Panel */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <label className="text-[13px] font-bold text-ink-primary">Discount & Round Off</label>
+                  <div className="flex gap-1">
+                    {[
+                      { type: 'percent' as const, val: '5', label: '5%' },
+                      { type: 'percent' as const, val: '10', label: '10%' },
+                      { type: 'amount' as const, val: '50', label: '₹50' },
+                      { type: 'amount' as const, val: '100', label: '₹100' },
+                    ].map(preset => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        disabled={loading || isInitialLoadingInvoice}
+                        onClick={() => { setDiscountType(preset.type); setDiscountValue(preset.val); }}
+                        className="px-1.5 py-0.5 bg-row-alt hover:bg-gray-200 text-ink-primary text-[10px] font-bold rounded border border-border disabled:opacity-50"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex bg-row-alt rounded-[8px] border border-border p-1">
+                      <button disabled={loading || isInitialLoadingInvoice} onClick={() => setDiscountType('amount')} className={`px-4 py-1.5 rounded-[6px] text-[14px] font-medium transition-colors ${discountType === 'amount' ? 'bg-surface shadow-sm' : 'text-ink-muted'}`}>₹</button>
+                      <button disabled={loading || isInitialLoadingInvoice} onClick={() => setDiscountType('percent')} className={`px-4 py-1.5 rounded-[6px] text-[14px] font-medium transition-colors ${discountType === 'percent' ? 'bg-surface shadow-sm' : 'text-ink-muted'}`}>%</button>
+                    </div>
+                    <input 
+                      type="number" 
+                      min="0"
+                      disabled={loading || isInitialLoadingInvoice}
+                      placeholder={discountType === 'percent' ? "0%" : "0.00"}
+                      value={discountValue} 
+                      onFocus={e => e.target.select()}
+                      onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (discountType === 'percent') {
+                          const num = parseFloat(val);
+                          if (num > 100) return;
+                        }
+                        setDiscountValue(val);
+                      }}
+                      className="flex-1 p-2 bg-surface border border-border rounded-[8px] text-[14px] font-mono focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                    />
+                  </div>
+                  {discountAmount > subtotal && subtotal > 0 && (
+                    <span className="text-[11px] font-bold text-red-600">
+                      Discount cannot exceed subtotal (Max: ₹{subtotal.toFixed(2)})
+                    </span>
+                  )}
+                </div>
+
+                {/* Round Off Input */}
+                <div className="flex items-center gap-2 pt-2">
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] font-bold text-ink-muted">Round Off (₹-50 to ₹+50)</label>
+                      {roundOffAmount !== 0 && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${roundOffAmount > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+                          {roundOffAmount > 0 ? `+₹${roundOffAmount.toFixed(2)}` : `-₹${Math.abs(roundOffAmount).toFixed(2)}`}
+                        </span>
+                      )}
+                    </div>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      min="-50"
+                      max="50"
+                      disabled={loading || isInitialLoadingInvoice}
+                      placeholder="0.00 (e.g. -0.40 or +0.60)"
+                      value={roundOff} 
+                      onFocus={e => e.target.select()}
+                      onChange={e => setRoundOff(e.target.value)}
+                      className="w-full p-2 bg-surface border border-border rounded-[8px] text-[13px] font-mono focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+
+                {/* GST Toggle */}
+                <div className="flex items-center justify-between pt-2">
+                  <label className="text-[13px] font-medium text-ink-primary flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      disabled={loading || isInitialLoadingInvoice}
+                      checked={gstApplied} 
+                      onChange={e => setGstApplied(e.target.checked)}
+                      className="w-4 h-4 rounded border-border text-[#A83D24] focus:ring-[#A83D24] disabled:opacity-50"
+                    />
+                    Apply 5% GST (2.5% CGST + 2.5% SGST)
+                  </label>
+                  {gstApplied && (
+                    <span className="text-[12px] font-mono font-bold text-ink-primary">
+                      +₹{(cgstAmount + sgstAmount).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment Methods */}
+              <div className="space-y-3 pt-4 border-t border-border">
+                <label className="text-[13px] font-bold text-ink-primary">Payment method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['CASH', 'UPI', 'CREDIT', 'SPLIT', 'STORE_CREDIT'] as const).map(m => {
+                    if (m === 'STORE_CREDIT' && customerCredit <= 0) return null;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        disabled={loading || isInitialLoadingInvoice}
+                        onClick={() => {
+                          setPaymentMethod(m);
+                          if (m === 'SPLIT') {
+                            setIsSplitModalOpen(true);
+                          }
+                        }}
+                        className={`p-2.5 rounded-[8px] border text-[13px] font-bold transition-all flex flex-col items-center gap-1 disabled:opacity-50 ${
+                          paymentMethod === m 
+                            ? m === 'STORE_CREDIT' 
+                              ? 'border-emerald-600 bg-emerald-50 text-emerald-900 shadow-sm'
+                              : 'border-[#A83D24] bg-red-50 text-[#A83D24] shadow-sm'
+                            : 'border-border bg-surface text-ink-muted hover:border-gray-300'
+                        }`}
+                      >
+                        {m === 'CASH' && <IndianRupee className="w-4 h-4" />}
+                        {m === 'UPI' && <CreditCard className="w-4 h-4" />}
+                        {m === 'CREDIT' && <User className="w-4 h-4" />}
+                        {m === 'SPLIT' && <Percent className="w-4 h-4" />}
+                        {m === 'STORE_CREDIT' && <Wallet className="w-4 h-4 text-emerald-700" />}
+                        <span>{m === 'STORE_CREDIT' ? 'Store Credit' : m}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Split Details Display */}
+              {paymentMethod === 'SPLIT' && (
+                <div className="bg-surface border border-border rounded-[8px] p-4 text-[13px]">
+                  <div className="flex justify-between mb-1"><span>Cash</span><span>₹{parseFloat(splitCash||'0').toFixed(2)}</span></div>
+                  <div className="flex justify-between mb-1"><span>UPI</span><span>₹{parseFloat(splitUpi||'0').toFixed(2)}</span></div>
+                  {parseFloat(splitCredit || '0') > 0 && (
+                    <div className="flex justify-between mb-1 text-emerald-700 font-medium"><span>Store Credit</span><span>₹{parseFloat(splitCredit||'0').toFixed(2)}</span></div>
+                  )}
+                  <div className="flex justify-between font-bold mb-2"><span>Bill total</span><span>₹{finalTotal.toFixed(2)}</span></div>
+                  {splitSaved ? (
+                    <p className="text-green-600 font-medium mb-3">Split balances the bill.</p>
+                  ) : (
+                    <p className="text-red-600 font-medium mb-3">Split must cover the full bill. Partial dues are not allowed with Split.</p>
+                  )}
+                  <button onClick={() => setIsSplitModalOpen(true)} className="w-full py-2 border border-[#A83D24] text-[#A83D24] rounded-[8px] font-bold">Edit split amounts</button>
+                </div>
+              )}
+
+              {/* Amount Paid for Single Methods */}
+              {(paymentMethod === 'CASH' || paymentMethod === 'UPI') && (() => {
+                const enteredPaid = parseFloat(amountPaidStr || '0');
+                const isOverpaid = amountPaidStr.trim() !== '' && enteredPaid > finalTotal;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[13px] font-bold text-ink-primary">Amount paid</label>
+                      {isOverpaid && (
+                        <span className="text-[11px] font-bold text-red-600">
+                          Max ₹{finalTotal.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                    <input 
+                      type="number" 
+                      min="0"
+                      disabled={loading || isInitialLoadingInvoice}
+                      placeholder={finalTotal.toFixed(2)} 
+                      value={amountPaidStr} 
+                      onFocus={e => e.target.select()}
+                      onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                      onChange={e => setAmountPaidStr(e.target.value)}
+                      className={`w-full p-2.5 bg-surface border rounded-[8px] text-[14px] font-mono focus:outline-none ${
+                        isOverpaid 
+                          ? 'border-red-500 bg-red-50/40 text-red-700 focus:ring-1 focus:ring-red-500' 
+                          : 'border-border focus:ring-1 focus:ring-[#A83D24]'
+                      }`}
+                    />
+                    {isOverpaid && (
+                      <p className="text-xs text-red-600 font-medium">
+                        Overpayment is not allowed. Amount cannot exceed invoice total of ₹{finalTotal.toFixed(2)}.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Bottom Totals & Submit */}
+            <div className="p-5 bg-row-alt/50 border-t border-border space-y-3">
+              <div className="flex justify-between text-[14px] font-medium text-ink-primary">
+                <span>Subtotal</span>
+                <span className="font-mono">₹{subtotal.toFixed(2)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-[14px] font-medium text-[#A83D24]">
+                  <span>Discount</span>
+                  <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {roundOffAmount !== 0 && (
+                <div className="flex justify-between text-[14px] font-medium text-ink-muted">
+                  <span>Round Off</span>
+                  <span className="font-mono">{roundOffAmount > 0 ? `+₹${roundOffAmount.toFixed(2)}` : `-₹${Math.abs(roundOffAmount).toFixed(2)}`}</span>
+                </div>
+              )}
+              {gstApplied && (
+                <>
+                  <div className="flex justify-between text-[14px] font-medium text-ink-muted">
+                    <span>CGST (2.5%)</span>
+                    <span className="font-mono">₹{cgstAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[14px] font-medium text-ink-muted">
+                    <span>SGST (2.5%)</span>
+                    <span className="font-mono">₹{sgstAmount.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between text-[16px] font-bold text-ink-primary pt-2 border-t border-border">
+                <span>Total to Pay</span>
+                <span className="font-mono">₹{finalTotal.toFixed(2)}</span>
+              </div>
+              <button 
+                onClick={handleCheckoutOrUpdate}
+                disabled={
+                  loading || 
+                  isInitialLoadingInvoice ||
+                  cart.length === 0 || 
+                  ((paymentMethod === 'CASH' || paymentMethod === 'UPI') && parseFloat(amountPaidStr || '0') > finalTotal) ||
+                  (paymentMethod === 'STORE_CREDIT' && customerCredit < finalTotal)
+                }
+                className={`w-full py-3.5 rounded-[10px] font-bold text-[15px] transition-colors disabled:opacity-50 shadow-sm flex items-center justify-center gap-2 ${
+                  editInvoiceId 
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white' 
+                    : 'bg-[#A83D24] hover:bg-[#91321C] text-white'
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : editInvoiceId ? (
+                  <>
+                    <Edit3 className="w-4 h-4" />
+                    <span>Save Invoice Changes (₹{finalTotal.toFixed(2)})</span>
+                  </>
+                ) : (
+                  <span>Complete Checkout (₹{finalTotal.toFixed(2)})</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Split Payment Modal */}
+      {isSplitModalOpen && (
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) { setIsSplitModalOpen(false); setSplitError(null); } }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 cursor-pointer"
+        >
+          <div className="bg-surface border border-border rounded-[16px] max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-150 cursor-default">
+            <div className="flex justify-between items-center">
+              <h2 className="text-[17px] font-bold text-ink-primary">Split Payment</h2>
+              <button onClick={() => { setIsSplitModalOpen(false); setSplitError(null); }} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {splitError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-700">
+                {splitError}
+              </div>
+            )}
+            <div className="space-y-4">
+              {customerCredit > 0 && (
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[12px] font-bold uppercase text-emerald-800 flex items-center gap-1">
+                      <Wallet className="w-3.5 h-3.5 text-emerald-700" />
+                      Store Credit (₹)
+                    </label>
+                    <span className="text-[11px] font-medium text-emerald-700">Max ₹{customerCredit.toFixed(2)}</span>
+                  </div>
+                  <input 
+                    type="number" 
+                    min="0"
+                    step="0.01"
+                    value={splitCredit} 
+                    onFocus={e => e.target.select()}
+                    onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                    onChange={e => { setSplitCredit(e.target.value); setSplitSaved(false); setSplitError(null); }}
+                    placeholder={`0.00 (Max ${customerCredit.toFixed(2)})`} 
+                    max={customerCredit}
+                    className="w-full p-3 bg-emerald-50/50 border border-emerald-200 rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-emerald-600 text-emerald-900"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-[12px] font-bold uppercase text-ink-muted mb-1">Cash Amount (₹)</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  step="0.01"
+                  value={splitCash} 
+                  onFocus={e => e.target.select()}
+                  onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                  onChange={e => { setSplitCash(e.target.value); setSplitSaved(false); setSplitError(null); }}
+                  placeholder="0.00" 
+                  className="w-full p-3 bg-surface border border-border rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold uppercase text-ink-muted mb-1">UPI Amount (₹)</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  step="0.01"
+                  value={splitUpi} 
+                  onFocus={e => e.target.select()}
+                  onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                  onChange={e => { setSplitUpi(e.target.value); setSplitSaved(false); setSplitError(null); }}
+                  placeholder="0.00" 
+                  className="w-full p-3 bg-surface border border-border rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                />
+              </div>
+            </div>
+            <div className="pt-2 border-t border-border flex justify-between items-center text-[14px]">
+              <span className="font-medium text-ink-muted">Total Entered / Required</span>
+              <span className="font-mono font-bold">
+                ₹{((parseFloat(splitCash||'0')) + (parseFloat(splitUpi||'0')) + (parseFloat(splitCredit||'0'))).toFixed(2)} / ₹{finalTotal.toFixed(2)}
+              </span>
+            </div>
+            <button 
+              onClick={handleSaveSplit}
+              className="w-full py-3 bg-[#A83D24] hover:bg-[#91321C] text-white rounded-[8px] font-bold text-[14px] transition-colors"
+            >
+              Save Split
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Styled Clear Cart Confirmation Modal */}
+      {isClearCartModalOpen && (
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setIsClearCartModalOpen(false); }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 cursor-pointer"
+        >
+          <div className="bg-surface border border-border rounded-[16px] max-w-sm w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150 cursor-default">
+            <div className="flex items-center gap-3 text-red-600">
+              <Trash2 className="w-6 h-6 shrink-0" />
+              <h3 className="text-base font-bold text-ink-primary">Clear Entire Cart?</h3>
+            </div>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              This will remove all <strong className="text-ink-primary">{cart.length} item(s)</strong> (Value: <strong className="text-ink-primary">₹{finalTotal.toFixed(2)}</strong>) from the active checkout screen.
+            </p>
+            <div className="flex gap-3 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearCartModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-ink-muted hover:text-ink-primary rounded-lg"
+              >
+                Keep Cart
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCart([]);
+                  setSplitSaved(false);
+                  setIsClearCartModalOpen(false);
+                }}
+                className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+              >
+                Yes, Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Camera Scanner Modal */}
+      {isCameraOpen && (
+        <CameraScanner
+          continuous={true}
+          statusMessage={cameraStatusMessage}
+          onScan={handleCameraScan}
+          onClose={() => {
+            setIsCameraOpen(false);
+            setCameraStatusMessage(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+export default function POSPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center bg-canvas">
+        <Loader2 className="w-8 h-8 animate-spin text-[#A83D24]" />
+      </div>
+    }>
+      <POSContent />
+    </Suspense>
+  );
+}

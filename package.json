@@ -1,26 +1,38 @@
 {
-  "name": "melbun-pos",
+  "name": "temp-app",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint"
   },
   "dependencies": {
-    "next": "16.3.2",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.3",
+    "geist": "^1.7.2",
+    "html5-qrcode": "^2.3.8",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.33.0",
+    "next": "14.2.5",
+    "react": "^18",
+    "react-barcode": "^1.6.1",
+    "react-dom": "^18",
+    "react-hot-toast": "^2.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@cloudflare/next-on-pages": "^1.13.16",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.2",
-    "tailwindcss": "^4",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "eslint-plugin-next-on-pages": "^1.13.16",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
     "typescript": "^5"
   }
 }

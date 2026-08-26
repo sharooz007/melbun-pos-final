@@ -1,26 +1,37 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --canvas-base: #F0E9D3;
+    --pure-surface: #FFFFFF;
+    --ink-primary: #1F1A17;
+    --ink-muted: #5C534A;
+    --border-default: #E5DCC8;
+    --accent: #C23E00;
+    --accent-hover: #A03000;
+    --row-alt: #FDFAF3;
+  }
+
+  body {
+    background-color: var(--canvas-base);
+    color: var(--ink-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .btn-tactile {
+    @apply active:scale-[0.98] transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)];
+  }
+  
+  .surface-card {
+    @apply bg-[var(--pure-surface)] rounded-[16px] border border-[var(--border-default)] shadow-[0_1px_2px_rgba(31,26,23,0.04),0_4px_16px_rgba(31,26,23,0.04)];
+  }
+
+  .input-control {
+    @apply w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--pure-surface)] px-4 py-2.5 text-[16px] text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--canvas-base)] transition-shadow duration-150;
+  }
 }
