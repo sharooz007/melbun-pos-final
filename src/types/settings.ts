@@ -8,6 +8,8 @@ export interface StoreSettings {
   gstin: string | null;
   business_day_start_hour: number; // 0 to 23
   timezone: string; // e.g. 'Asia/Kolkata'
+  whatsapp_invoice_template?: string | null;
+  whatsapp_due_reminder_template?: string | null;
   created_at: string;
   updated_at: string;
 }

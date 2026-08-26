@@ -25,12 +25,21 @@ import {
   QrCode,
   Check,
   Calendar,
-  Lock
+  Lock,
+  MessageSquare,
+  Send,
+  RefreshCw,
+  Sliders
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { getStoreSettingsAction, updateStoreSettingsAction } from '@/lib/actions/settings';
 import { StoreSettings } from '@/types/settings';
+import { 
+  DEFAULT_WHATSAPP_INVOICE_TEMPLATE, 
+  DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE, 
+  formatWhatsAppMessage 
+} from '@/lib/whatsapp';
 import toast from 'react-hot-toast';
 
 const HOURS = [
@@ -75,6 +84,10 @@ export default function SettingsPage() {
   const [gstin, setGstin] = useState('');
   const [startHour, setStartHour] = useState<number>(6);
   const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const [whatsappInvoiceTemplate, setWhatsappInvoiceTemplate] = useState(DEFAULT_WHATSAPP_INVOICE_TEMPLATE);
+  const [whatsappDueReminderTemplate, setWhatsappDueReminderTemplate] = useState(DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE);
+  const [activeTemplateTab, setActiveTemplateTab] = useState<'invoice' | 'due'>('invoice');
+  const [rightPreviewTab, setRightPreviewTab] = useState<'receipt' | 'whatsapp'>('whatsapp');
 
   // Baseline Snapshot for Dirty Tracking & Discard
   const [initialData, setInitialData] = useState<StoreSettings | null>(null);
@@ -114,9 +127,11 @@ export default function SettingsPage() {
       email !== (initialData.email || '') ||
       gstin !== (initialData.gstin || '') ||
       startHour !== (initialData.business_day_start_hour ?? 6) ||
-      timezone !== (initialData.timezone || 'Asia/Kolkata')
+      timezone !== (initialData.timezone || 'Asia/Kolkata') ||
+      whatsappInvoiceTemplate !== (initialData.whatsapp_invoice_template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE) ||
+      whatsappDueReminderTemplate !== (initialData.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE)
     );
-  }, [initialData, storeName, tagline, address, phone, email, gstin, startHour, timezone]);
+  }, [initialData, storeName, tagline, address, phone, email, gstin, startHour, timezone, whatsappInvoiceTemplate, whatsappDueReminderTemplate]);
 
   // BeforeUnload Guard
   useEffect(() => {
@@ -145,6 +160,8 @@ export default function SettingsPage() {
         setGstin(res.data.gstin || '');
         setStartHour(res.data.business_day_start_hour ?? 6);
         setTimezone(res.data.timezone || 'Asia/Kolkata');
+        setWhatsappInvoiceTemplate(res.data.whatsapp_invoice_template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE);
+        setWhatsappDueReminderTemplate(res.data.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE);
         if (res.data.updated_at) {
           setLastSavedTime(new Date(res.data.updated_at).toLocaleTimeString('en-IN', {
             hour: '2-digit',
@@ -175,6 +192,8 @@ export default function SettingsPage() {
     setGstin(initialData.gstin || '');
     setStartHour(initialData.business_day_start_hour ?? 6);
     setTimezone(initialData.timezone || 'Asia/Kolkata');
+    setWhatsappInvoiceTemplate(initialData.whatsapp_invoice_template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE);
+    setWhatsappDueReminderTemplate(initialData.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE);
     toast.success('Changes reverted to saved profile.');
   };
 
@@ -207,7 +226,9 @@ export default function SettingsPage() {
         email: email.trim() ? email.trim() : null,
         gstin: gstin.trim() ? gstin.trim().toUpperCase() : null,
         business_day_start_hour: startHour,
-        timezone: timezone.trim() || 'Asia/Kolkata'
+        timezone: timezone.trim() || 'Asia/Kolkata',
+        whatsapp_invoice_template: whatsappInvoiceTemplate.trim() ? whatsappInvoiceTemplate.trim() : null,
+        whatsapp_due_reminder_template: whatsappDueReminderTemplate.trim() ? whatsappDueReminderTemplate.trim() : null
       });
 
       if (res.success && res.data) {
@@ -460,7 +481,132 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Card 3: Session & Security */}
+            {/* Card 3: WhatsApp Messaging & Due Reminders Configuration */}
+            <div className="bg-surface p-5 sm:p-6 rounded-2xl border border-border shadow-xs space-y-5">
+              <div className="flex items-center justify-between border-b border-border pb-3.5 flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-bold text-ink-primary">
+                      WhatsApp Messaging &amp; Due Reminders
+                    </h2>
+                    <p className="text-xs text-ink-muted">
+                      Customise instant message templates sent to customer WhatsApp chats.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sub-tab switcher */}
+                <div className="flex items-center gap-1 bg-row-alt p-1 rounded-xl border border-border">
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTemplateTab('invoice'); setRightPreviewTab('whatsapp'); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      activeTemplateTab === 'invoice'
+                        ? 'bg-surface text-ink-primary shadow-2xs'
+                        : 'text-ink-muted hover:text-ink-primary'
+                    }`}
+                  >
+                    Invoice Receipt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveTemplateTab('due'); setRightPreviewTab('whatsapp'); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      activeTemplateTab === 'due'
+                        ? 'bg-surface text-ink-primary shadow-2xs'
+                        : 'text-ink-muted hover:text-ink-primary'
+                    }`}
+                  >
+                    Due Reminder
+                  </button>
+                </div>
+              </div>
+
+              {/* Template Editor */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-ink-primary flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-accent" />
+                    {activeTemplateTab === 'invoice' ? 'Invoice Receipt Message Template' : 'Pending Due Reminder Template'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeTemplateTab === 'invoice') {
+                        setWhatsappInvoiceTemplate(DEFAULT_WHATSAPP_INVOICE_TEMPLATE);
+                      } else {
+                        setWhatsappDueReminderTemplate(DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE);
+                      }
+                      toast.success('Reset template to default.');
+                    }}
+                    className="text-[11px] font-bold text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Reset to Default
+                  </button>
+                </div>
+
+                {activeTemplateTab === 'invoice' ? (
+                  <textarea
+                    rows={8}
+                    value={whatsappInvoiceTemplate}
+                    onChange={(e) => setWhatsappInvoiceTemplate(e.target.value)}
+                    placeholder="Enter WhatsApp invoice message template..."
+                    className="w-full p-3.5 bg-row-alt border border-border rounded-xl text-xs sm:text-sm font-mono text-ink-primary focus:ring-2 focus:ring-accent focus:bg-surface outline-none transition resize-y leading-relaxed"
+                  />
+                ) : (
+                  <textarea
+                    rows={8}
+                    value={whatsappDueReminderTemplate}
+                    onChange={(e) => setWhatsappDueReminderTemplate(e.target.value)}
+                    placeholder="Enter WhatsApp due reminder message template..."
+                    className="w-full p-3.5 bg-row-alt border border-border rounded-xl text-xs sm:text-sm font-mono text-ink-primary focus:ring-2 focus:ring-accent focus:bg-surface outline-none transition resize-y leading-relaxed"
+                  />
+                )}
+
+                {/* Variable Placeholder Chips */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted block">
+                    Click to Insert Dynamic Placeholders:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { tag: '{customer_name}', label: 'Customer Name' },
+                      { tag: '{store_name}', label: 'Store Name' },
+                      { tag: '{invoice_number}', label: 'Invoice #' },
+                      { tag: '{date}', label: 'Date' },
+                      { tag: '{item_count}', label: 'Items' },
+                      { tag: '{total_amount}', label: 'Total' },
+                      { tag: '{paid_amount}', label: 'Paid' },
+                      { tag: '{due_amount}', label: 'Due Balance' },
+                      { tag: '{status}', label: 'Status' },
+                      { tag: '{store_phone}', label: 'Store Phone' },
+                    ].map((item) => (
+                      <button
+                        key={item.tag}
+                        type="button"
+                        onClick={() => {
+                          if (activeTemplateTab === 'invoice') {
+                            setWhatsappInvoiceTemplate(prev => prev + ' ' + item.tag);
+                          } else {
+                            setWhatsappDueReminderTemplate(prev => prev + ' ' + item.tag);
+                          }
+                        }}
+                        className="px-2 py-1 bg-surface border border-border hover:border-accent hover:bg-accent/5 rounded-lg text-[11px] font-mono text-ink-primary transition cursor-pointer shadow-2xs flex items-center gap-1"
+                      >
+                        <span className="text-accent font-bold">+</span>
+                        <span>{item.tag}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 4: Session & Security */}
             <div className="bg-surface p-5 sm:p-6 rounded-2xl border border-border shadow-xs space-y-4">
               <div className="flex items-center gap-3 border-b border-border pb-3.5">
                 <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
@@ -468,7 +614,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="text-sm sm:text-base font-bold text-ink-primary">
-                    Terminal Session & Authentication
+                    Terminal Session &amp; Authentication
                   </h2>
                   <p className="text-xs text-ink-muted">
                     Active cashier session is secured with Supabase token authentication.
@@ -493,72 +639,139 @@ export default function SettingsPage() {
 
           </div>
 
-          {/* RIGHT COLUMN: Live Receipt Header Preview (5 cols on desktop, sticky) */}
+          {/* RIGHT COLUMN: Live Receipt / WhatsApp Preview (5 cols on desktop, sticky) */}
           <div className="lg:col-span-5 space-y-4">
             <div className="sticky top-20 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-ink-muted flex items-center gap-1.5">
-                  <Receipt className="w-4 h-4 text-accent" /> Live Receipt Header Preview
-                </span>
+                <div className="flex items-center gap-1 bg-row-alt p-1 rounded-xl border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setRightPreviewTab('whatsapp')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      rightPreviewTab === 'whatsapp'
+                        ? 'bg-surface text-ink-primary shadow-2xs'
+                        : 'text-ink-muted hover:text-ink-primary'
+                    }`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>WhatsApp Chat</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRightPreviewTab('receipt')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      rightPreviewTab === 'receipt'
+                        ? 'bg-surface text-ink-primary shadow-2xs'
+                        : 'text-ink-muted hover:text-ink-primary'
+                    }`}
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-accent" />
+                    <span>Thermal Receipt</span>
+                  </button>
+                </div>
                 <span className="text-[10px] bg-accent/10 text-accent font-bold px-2 py-0.5 rounded-full">
-                  Real-time
+                  Live Preview
                 </span>
               </div>
 
-              {/* Thermal Paper Simulation Card */}
-              <div className="bg-surface rounded-2xl border-2 border-dashed border-border p-6 shadow-sm space-y-4 font-mono text-center relative overflow-hidden">
-                {/* Store Header Simulation */}
-                <div className="space-y-1 border-b border-dashed border-border pb-4">
-                  <h3 className="font-extrabold text-base tracking-tight text-ink-primary uppercase truncate">
-                    {storeName || 'MELBON POS'}
-                  </h3>
-                  {tagline && (
-                    <p className="text-[11px] text-ink-muted font-sans font-medium">
-                      {tagline}
-                    </p>
-                  )}
-                  {address && (
-                    <p className="text-[10px] text-ink-muted leading-tight pt-1 max-w-xs mx-auto">
-                      {address}
-                    </p>
-                  )}
-                  <div className="pt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[10px] text-ink-muted">
-                    {phone && <span>Tel: {phone}</span>}
-                    {email && <span>Email: {email}</span>}
-                  </div>
-                  {gstin && (
-                    <div className="pt-1 text-[11px] font-bold text-ink-primary">
-                      GSTIN: {gstin}
+              {rightPreviewTab === 'whatsapp' ? (
+                /* WhatsApp Mockup Preview Card */
+                <div className="bg-[#EFEAE2] rounded-2xl border border-border/80 p-4 sm:p-5 shadow-sm space-y-3 relative overflow-hidden">
+                  {/* WhatsApp Chat Header */}
+                  <div className="flex items-center gap-3 bg-[#075E54] text-white p-3 rounded-xl shadow-xs">
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs">
+                      MC
                     </div>
-                  )}
-                </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold truncate">Ramesh Kumar (Customer)</div>
+                      <div className="text-[10px] text-white/80">Online · WhatsApp</div>
+                    </div>
+                  </div>
 
-                {/* Simulated Invoice Body */}
-                <div className="space-y-2 text-[11px] text-left text-ink-muted">
-                  <div className="flex justify-between border-b border-border/50 pb-1">
-                    <span>INVOICE: #MELBON-PREVIEW</span>
-                    <span>{new Date().toLocaleDateString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between text-ink-primary font-bold">
-                    <span>Sample Premium Item × 2</span>
-                    <span>₹1,499.00</span>
-                  </div>
-                  <div className="flex justify-between text-ink-muted">
-                    <span>CGST (2.5%) + SGST (2.5%)</span>
-                    <span>₹74.95</span>
-                  </div>
-                  <div className="flex justify-between text-ink-primary font-extrabold text-xs pt-1 border-t border-dashed border-border">
-                    <span>TOTAL AMOUNT</span>
-                    <span className="text-accent">₹1,573.95</span>
+                  {/* WhatsApp Speech Bubble */}
+                  <div className="flex justify-end pt-2">
+                    <div className="bg-[#DCF8C6] text-gray-900 rounded-2xl rounded-tr-xs p-3.5 shadow-xs max-w-[95%] sm:max-w-[90%] text-xs space-y-2 border border-emerald-200/50">
+                      <div className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-gray-800">
+                        {formatWhatsAppMessage(
+                          activeTemplateTab === 'invoice' ? whatsappInvoiceTemplate : whatsappDueReminderTemplate,
+                          {
+                            customer_name: 'Ramesh Kumar',
+                            store_name: storeName || 'Melbon Wholesale',
+                            invoice_number: 'MELBON/2026/000142',
+                            date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                            item_count: 3,
+                            total_amount: 1573.95,
+                            paid_amount: activeTemplateTab === 'invoice' ? 1573.95 : 1000.00,
+                            due_amount: activeTemplateTab === 'invoice' ? 0 : 573.95,
+                            status: activeTemplateTab === 'invoice' ? 'Paid' : 'Partial (Due: ₹573.95)',
+                            store_phone: phone || '+91 98765 43210',
+                            store_address: address || 'MG Road, Bengaluru'
+                          }
+                        )}
+                      </div>
+                      <div className="flex items-center justify-end gap-1 text-[10px] text-gray-500 pt-1">
+                        <span>{currentTimeStr || '12:00 PM'}</span>
+                        <span className="text-blue-500 font-bold">✓✓</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              ) : (
+                /* Thermal Paper Simulation Card */
+                <div className="bg-surface rounded-2xl border-2 border-dashed border-border p-6 shadow-sm space-y-4 font-mono text-center relative overflow-hidden">
+                  {/* Store Header Simulation */}
+                  <div className="space-y-1 border-b border-dashed border-border pb-4">
+                    <h3 className="font-extrabold text-base tracking-tight text-ink-primary uppercase truncate">
+                      {storeName || 'MELBON POS'}
+                    </h3>
+                    {tagline && (
+                      <p className="text-[11px] text-ink-muted font-sans font-medium">
+                        {tagline}
+                      </p>
+                    )}
+                    {address && (
+                      <p className="text-[10px] text-ink-muted leading-tight pt-1 max-w-xs mx-auto">
+                        {address}
+                      </p>
+                    )}
+                    <div className="pt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[10px] text-ink-muted">
+                      {phone && <span>Tel: {phone}</span>}
+                      {email && <span>Email: {email}</span>}
+                    </div>
+                    {gstin && (
+                      <div className="pt-1 text-[11px] font-bold text-ink-primary">
+                        GSTIN: {gstin}
+                      </div>
+                    )}
+                  </div>
 
-                {/* Footer Simulation */}
-                <div className="pt-3 border-t border-dashed border-border text-[10px] text-ink-muted text-center space-y-1">
-                  <p>*** THANK YOU FOR SHOPPING ***</p>
-                  <p className="text-[9px] text-ink-muted/70">Powered by Melbon Engine</p>
+                  {/* Simulated Invoice Body */}
+                  <div className="space-y-2 text-[11px] text-left text-ink-muted">
+                    <div className="flex justify-between border-b border-border/50 pb-1">
+                      <span>INVOICE: #MELBON-PREVIEW</span>
+                      <span>{new Date().toLocaleDateString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-ink-primary font-bold">
+                      <span>Sample Premium Item × 2</span>
+                      <span>₹1,499.00</span>
+                    </div>
+                    <div className="flex justify-between text-ink-muted">
+                      <span>CGST (2.5%) + SGST (2.5%)</span>
+                      <span>₹74.95</span>
+                    </div>
+                    <div className="flex justify-between text-ink-primary font-extrabold text-xs pt-1 border-t border-dashed border-border">
+                      <span>TOTAL AMOUNT</span>
+                      <span className="text-accent">₹1,573.95</span>
+                    </div>
+                  </div>
+
+                  {/* Footer Simulation */}
+                  <div className="pt-3 border-t border-dashed border-border text-[10px] text-ink-muted text-center space-y-1">
+                    <p>*** THANK YOU FOR SHOPPING ***</p>
+                    <p className="text-[9px] text-ink-muted/70">Powered by Melbon Engine</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Quick Save Hint */}
               <div className="p-3.5 bg-surface rounded-xl border border-border text-xs text-ink-muted flex items-center gap-2.5">

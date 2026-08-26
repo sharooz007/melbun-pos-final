@@ -25,7 +25,8 @@ import {
   Clock,
   Edit3,
   RotateCcw,
-  ArrowLeft
+  ArrowLeft,
+  MessageSquare
 } from 'lucide-react';
 import CameraScanner from '@/components/lookup/CameraScanner';
 import { searchVariantsAction } from '@/lib/actions/pos';
@@ -34,6 +35,14 @@ import { getCustomersListAction, getOrCreateCustomerAction } from '@/lib/actions
 import { getFullInvoiceAction } from '@/lib/actions/invoices';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
 import { generateInvoicePDF } from '@/lib/pdf/generateInvoice';
+import { 
+  formatWhatsAppMessage, 
+  openWhatsAppChat, 
+  cleanWhatsAppPhone, 
+  DEFAULT_WHATSAPP_INVOICE_TEMPLATE 
+} from '@/lib/whatsapp';
+import { WhatsAppPromptModal } from '@/components/whatsapp/WhatsAppPromptModal';
+import toast from 'react-hot-toast';
 
 interface CartItem {
   variant_id: string;
@@ -85,6 +94,83 @@ function POSContent() {
   const [loading, setLoading] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string, invoiceId?: string, invoiceNumber?: string } | null>(null);
+  const [storeSettings, setStoreSettings] = useState<any>(null);
+
+  // WhatsApp Checkout State & Modal
+  const [lastCheckoutSummary, setLastCheckoutSummary] = useState<{
+    customerName?: string;
+    customerPhone?: string;
+    totalAmount: number;
+    paidAmount: number;
+    dueAmount: number;
+    itemCount: number;
+    invoiceNumber?: string;
+    invoiceId?: string;
+  } | null>(null);
+
+  const [whatsappModal, setWhatsappModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    defaultPhone: string;
+    message: string;
+    customerName: string;
+  }>({
+    isOpen: false,
+    title: '',
+    defaultPhone: '',
+    message: '',
+    customerName: ''
+  });
+
+  useEffect(() => {
+    getStoreSettingsAction().then((res) => {
+      if (res.success && res.data) {
+        setStoreSettings(res.data);
+      }
+    });
+  }, []);
+
+  // WhatsApp Handler
+  const handleSendWhatsAppReceipt = () => {
+    if (!lastCheckoutSummary && !status?.invoiceNumber) return;
+    const template = storeSettings?.whatsapp_invoice_template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE;
+    const totalAmt = lastCheckoutSummary?.totalAmount ?? 0;
+    const paidAmt = lastCheckoutSummary?.paidAmount ?? 0;
+    const dueAmt = lastCheckoutSummary?.dueAmount ?? 0;
+    const itemCount = lastCheckoutSummary?.itemCount ?? 1;
+    const invNumber = status?.invoiceNumber || lastCheckoutSummary?.invoiceNumber || 'N/A';
+    const cName = lastCheckoutSummary?.customerName || customerName || 'Valued Customer';
+    const cPhone = lastCheckoutSummary?.customerPhone || customerPhone || '';
+
+    const message = formatWhatsAppMessage(template, {
+      customer_name: cName,
+      customer_phone: cPhone,
+      store_name: storeSettings?.store_name || 'Melbon Wholesale',
+      store_phone: storeSettings?.phone || '',
+      store_address: storeSettings?.address || '',
+      invoice_number: invNumber,
+      date: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      item_count: itemCount,
+      total_amount: totalAmt,
+      paid_amount: paidAmt,
+      due_amount: dueAmt,
+      status: dueAmt > 0 ? `Partial (Due: ₹${dueAmt.toFixed(2)})` : 'Paid'
+    });
+
+    const cleanPhone = cleanWhatsAppPhone(cPhone);
+    if (cleanPhone) {
+      openWhatsAppChat({ phone: cleanPhone, message });
+      toast.success('Opening WhatsApp...');
+    } else {
+      setWhatsappModal({
+        isOpen: true,
+        title: 'Send WhatsApp Receipt',
+        defaultPhone: '',
+        message,
+        customerName: cName
+      });
+    }
+  };
 
   // Success Modal Escape Key Dismissal
   useEffect(() => {
@@ -745,6 +831,19 @@ function POSContent() {
         if (!res?.success) {
           setStatus({ type: 'error', msg: res?.error || 'Failed to update invoice' });
         } else {
+          const totalPaidAmt = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+          const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
+          setLastCheckoutSummary({
+            customerName: customerName || undefined,
+            customerPhone: customerPhone || undefined,
+            totalAmount: finalTotal,
+            paidAmount: totalPaidAmt,
+            dueAmount: pendingDueAmt,
+            itemCount: validCart.length,
+            invoiceNumber: editInvoiceNumber || undefined,
+            invoiceId: editInvoiceId || undefined
+          });
+
           setIsMobileCheckoutOpen(false);
           setStatus({ 
             type: 'success', 
@@ -778,6 +877,19 @@ function POSContent() {
         if (!res?.success) {
           setStatus({ type: 'error', msg: res?.error || 'Checkout failed' });
         } else {
+          const totalPaidAmt = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+          const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
+          setLastCheckoutSummary({
+            customerName: customerName || undefined,
+            customerPhone: customerPhone || undefined,
+            totalAmount: finalTotal,
+            paidAmount: totalPaidAmt,
+            dueAmount: pendingDueAmt,
+            itemCount: validCart.length,
+            invoiceNumber: res.data.invoice_number,
+            invoiceId: res.data.invoice_id
+          });
+
           setIsMobileCheckoutOpen(false);
           setStatus({ 
             type: 'success', 
@@ -1708,6 +1820,16 @@ function POSContent() {
             </div>
 
             <div className="space-y-2 pt-2">
+              {/* WhatsApp Share Button */}
+              <button
+                type="button"
+                onClick={handleSendWhatsAppReceipt}
+                className="w-full py-2.5 px-4 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs min-h-[42px] cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Send on WhatsApp</span>
+              </button>
+
               {status.invoiceId && (
                 <button
                   onClick={() => handleDownloadPdf(status.invoiceId!)}
@@ -1742,6 +1864,16 @@ function POSContent() {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Prompt Modal */}
+      <WhatsAppPromptModal
+        isOpen={whatsappModal.isOpen}
+        onClose={() => setWhatsappModal(prev => ({ ...prev, isOpen: false }))}
+        title={whatsappModal.title}
+        defaultPhone={whatsappModal.defaultPhone}
+        message={whatsappModal.message}
+        customerName={whatsappModal.customerName}
+      />
     </div>
   );
 }

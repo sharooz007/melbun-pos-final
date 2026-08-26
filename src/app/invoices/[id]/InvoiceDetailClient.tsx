@@ -23,6 +23,16 @@ import {
   permanentlyDeleteInvoiceAction 
 } from '@/lib/actions/invoices';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
+import { 
+  formatWhatsAppMessage, 
+  openWhatsAppChat, 
+  cleanWhatsAppPhone, 
+  DEFAULT_WHATSAPP_INVOICE_TEMPLATE, 
+  DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE 
+} from '@/lib/whatsapp';
+import { WhatsAppPromptModal } from '@/components/whatsapp/WhatsAppPromptModal';
+import { MessageSquare, Send, Bell } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const formatINR = (amount: number | string | null | undefined) => {
   const num = typeof amount === 'number' ? amount : parseFloat(String(amount || 0));
@@ -38,9 +48,25 @@ const formatINR = (amount: number | string | null | undefined) => {
 export default function InvoiceDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const [invoice, setInvoice] = useState<any>(null);
+  const [storeSettings, setStoreSettings] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState<boolean>(false);
+
+  // WhatsApp Prompt Modal state
+  const [whatsappModal, setWhatsappModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    defaultPhone: string;
+    message: string;
+    customerName: string;
+  }>({
+    isOpen: false,
+    title: '',
+    defaultPhone: '',
+    message: '',
+    customerName: ''
+  });
 
   // Void modal
   const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
@@ -63,11 +89,17 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await getFullInvoiceAction(id);
-      if (res.success && res.data) {
-        setInvoice(res.data);
+      const [invRes, settingsRes] = await Promise.all([
+        getFullInvoiceAction(id),
+        getStoreSettingsAction()
+      ]);
+      if (invRes.success && invRes.data) {
+        setInvoice(invRes.data);
       } else {
-        setError(res.error || 'Invoice not found.');
+        setError(invRes.error || 'Invoice not found.');
+      }
+      if (settingsRes.success && settingsRes.data) {
+        setStoreSettings(settingsRes.data);
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to load invoice.');
@@ -109,6 +141,82 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
 
     return { rawProfit, netProfit, marginPercent, totalRefunds, effectiveTotal, totalPaid, dueAmount };
   }, [invoice]);
+
+  // WhatsApp Handlers
+  const handleSendWhatsAppReceipt = () => {
+    if (!invoice) return;
+    const template = storeSettings?.whatsapp_invoice_template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE;
+    const itemsCount = (invoice.invoice_items || []).length;
+    const statusLabel = invoice.is_voided 
+      ? 'VOIDED' 
+      : profitMetrics.dueAmount > 0 
+        ? `Partial (Due: ₹${profitMetrics.dueAmount.toFixed(2)})` 
+        : 'Paid';
+
+    const message = formatWhatsAppMessage(template, {
+      customer_name: invoice.customers?.name,
+      customer_phone: invoice.customers?.phone,
+      store_name: storeSettings?.store_name || 'Melbon Wholesale',
+      store_phone: storeSettings?.phone || '',
+      store_address: storeSettings?.address || '',
+      invoice_number: invoice.invoice_number,
+      date: new Date(invoice.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      item_count: itemsCount,
+      total_amount: Number(invoice.final_total || 0),
+      paid_amount: profitMetrics.totalPaid,
+      due_amount: profitMetrics.dueAmount,
+      status: statusLabel
+    });
+
+    const cleanPhone = cleanWhatsAppPhone(invoice.customers?.phone);
+    if (cleanPhone) {
+      openWhatsAppChat({ phone: cleanPhone, message });
+      toast.success('Opening WhatsApp...');
+    } else {
+      setWhatsappModal({
+        isOpen: true,
+        title: 'Send WhatsApp Receipt',
+        defaultPhone: '',
+        message,
+        customerName: invoice.customers?.name || 'Walk-in Customer'
+      });
+    }
+  };
+
+  const handleSendWhatsAppDueReminder = () => {
+    if (!invoice || invoice.is_voided || profitMetrics.dueAmount <= 0) return;
+    const template = storeSettings?.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE;
+    const itemsCount = (invoice.invoice_items || []).length;
+
+    const message = formatWhatsAppMessage(template, {
+      customer_name: invoice.customers?.name,
+      customer_phone: invoice.customers?.phone,
+      store_name: storeSettings?.store_name || 'Melbon Wholesale',
+      store_phone: storeSettings?.phone || '',
+      store_address: storeSettings?.address || '',
+      invoice_number: invoice.invoice_number,
+      date: new Date(invoice.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      item_count: itemsCount,
+      total_amount: Number(invoice.final_total || 0),
+      paid_amount: profitMetrics.totalPaid,
+      due_amount: profitMetrics.dueAmount,
+      status: `Payment Due: ₹${profitMetrics.dueAmount.toFixed(2)}`
+    });
+
+    const cleanPhone = cleanWhatsAppPhone(invoice.customers?.phone);
+    if (cleanPhone) {
+      openWhatsAppChat({ phone: cleanPhone, message });
+      toast.success('Opening WhatsApp Due Reminder...');
+    } else {
+      setWhatsappModal({
+        isOpen: true,
+        title: 'Send WhatsApp Due Reminder',
+        defaultPhone: '',
+        message,
+        customerName: invoice.customers?.name || 'Customer'
+      });
+    }
+  };
 
   const handlePrintPdf = async () => {
     if (!invoice || printing) return;
@@ -293,6 +401,30 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
               </Link>
             </>
           )}
+          {/* WhatsApp Share Action */}
+          <button
+            type="button"
+            onClick={handleSendWhatsAppReceipt}
+            className="px-3.5 py-2 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#075E54] border border-[#25D366]/30 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+            title="Send Invoice Receipt on WhatsApp"
+          >
+            <MessageSquare className="w-4 h-4 text-[#25D366]" />
+            <span>WhatsApp Receipt</span>
+          </button>
+
+          {/* WhatsApp Due Reminder Action (if dues are pending) */}
+          {profitMetrics.dueAmount > 0 && !invoice.is_voided && (
+            <button
+              type="button"
+              onClick={handleSendWhatsAppDueReminder}
+              className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+              title="Send Pending Due Reminder on WhatsApp"
+            >
+              <Bell className="w-4 h-4 text-amber-600" />
+              <span>WhatsApp Due Reminder</span>
+            </button>
+          )}
+
           <button
             onClick={handlePrintPdf}
             disabled={printing}
@@ -636,6 +768,16 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Prompt Modal */}
+      <WhatsAppPromptModal
+        isOpen={whatsappModal.isOpen}
+        onClose={() => setWhatsappModal(prev => ({ ...prev, isOpen: false }))}
+        title={whatsappModal.title}
+        defaultPhone={whatsappModal.defaultPhone}
+        message={whatsappModal.message}
+        customerName={whatsappModal.customerName}
+      />
     </div>
   );
 }

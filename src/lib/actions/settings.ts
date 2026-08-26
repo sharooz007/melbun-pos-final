@@ -13,7 +13,9 @@ const updateSettingsSchema = z.object({
   email: z.string().trim().email('Invalid email address').max(100).optional().nullable().or(z.literal('')),
   gstin: z.string().trim().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$|^$/, 'Invalid GSTIN format: Must be 15 uppercase alphanumeric characters (e.g. 29AAAAA0000A1Z5)').optional().nullable().or(z.literal('')),
   business_day_start_hour: z.coerce.number().int().min(0, 'Start hour must be between 0 and 23').max(23, 'Start hour must be between 0 and 23').default(6),
-  timezone: z.string().trim().min(1).default('Asia/Kolkata')
+  timezone: z.string().trim().min(1).default('Asia/Kolkata'),
+  whatsapp_invoice_template: z.string().trim().max(2000).optional().nullable(),
+  whatsapp_due_reminder_template: z.string().trim().max(2000).optional().nullable()
 });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
@@ -48,7 +50,9 @@ export async function updateStoreSettingsAction(payload: unknown): Promise<{ suc
       p_email: parsed.data.email || null,
       p_gstin: parsed.data.gstin || null,
       p_business_day_start_hour: parsed.data.business_day_start_hour,
-      p_timezone: parsed.data.timezone
+      p_timezone: parsed.data.timezone,
+      p_whatsapp_invoice_template: parsed.data.whatsapp_invoice_template || null,
+      p_whatsapp_due_reminder_template: parsed.data.whatsapp_due_reminder_template || null
     });
 
     if (error) {
