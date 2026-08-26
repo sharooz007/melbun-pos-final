@@ -8,7 +8,11 @@ import {
   getExpensesAction,
   updateExpenseAction,
   deleteExpenseAction,
-  getExpensesSummaryMetricsAction
+  getExpensesSummaryMetricsAction,
+  getExpenseCategoriesAction,
+  createExpenseCategoryAction,
+  updateExpenseCategoryAction,
+  deleteExpenseCategoryAction
 } from '@/lib/actions/expenses';
 import { ExpenseItem, ExpensePaymentMethod } from '@/types/expenses';
 import { 
@@ -22,25 +26,17 @@ import {
   ShieldAlert, 
   RefreshCw, 
   X, 
-  FileText,
-  Clock,
-  Pencil,
-  Ban,
-  Trash2,
-  Loader2,
-  Calendar
+  FileText, 
+  Clock, 
+  Pencil, 
+  Ban, 
+  Trash2, 
+  Loader2, 
+  Calendar,
+  Tags,
+  FolderPlus,
+  Check
 } from 'lucide-react';
-
-const CATEGORY_PRESETS = [
-  'Rent',
-  'Electricity & Utilities',
-  'Packaging Materials',
-  'Staff Tea & Refreshments',
-  'Logistics & Transport',
-  'Salaries & Advances',
-  'Store Maintenance',
-  'Miscellaneous'
-];
 
 const formatINR = (amount: number | string | null | undefined) => {
   const num = typeof amount === 'number' ? amount : parseFloat(String(amount || 0));
@@ -56,8 +52,9 @@ const formatINR = (amount: number | string | null | undefined) => {
 export default function ExpensesClient() {
   const router = useRouter();
 
-  // State: Data List
+  // State: Data List & Categories
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
   // Add Modal State
@@ -70,7 +67,21 @@ export default function ExpensesClient() {
   const [addError, setAddError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Edit Modal State
+  // Quick Inline Category creation state inside Add / Edit modals
+  const [isAddingNewCatInline, setIsAddingNewCatInline] = useState(false);
+  const [inlineNewCatName, setInlineNewCatName] = useState('');
+  const [inlineCatLoading, setInlineCatLoading] = useState(false);
+
+  // Categories Manager Modal State
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [editingCatName, setEditingCatName] = useState('');
+  const [savingCatEdit, setSavingCatEdit] = useState(false);
+
+  // Edit Expense Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedEditItem, setSelectedEditItem] = useState<ExpenseItem | null>(null);
   const [editCategory, setEditCategory] = useState('');
@@ -110,7 +121,7 @@ export default function ExpensesClient() {
   // Filtered expenses list
   const filteredExpenses = useMemo(() => {
     return expenses.filter(item => {
-      if (selectedExpenseCat !== 'ALL' && item.category !== selectedExpenseCat) {
+      if (selectedExpenseCat !== 'ALL' && item.category.toLowerCase() !== selectedExpenseCat.toLowerCase()) {
         return false;
       }
       if (expenseSearch.trim()) {
@@ -125,19 +136,23 @@ export default function ExpensesClient() {
     });
   }, [expenses, selectedExpenseCat, expenseSearch]);
 
-  // Load Expenses
+  // Load Expenses & Categories
   const loadExpenses = useCallback(async () => {
     setLoadingList(true);
     try {
-      const [res, metricsRes] = await Promise.all([
+      const [res, metricsRes, catRes] = await Promise.all([
         getExpensesAction(100),
-        getExpensesSummaryMetricsAction()
+        getExpensesSummaryMetricsAction(),
+        getExpenseCategoriesAction()
       ]);
       if (res.success) {
         setExpenses(res.data);
       }
       if (metricsRes.success) {
         setMetricsSummary(metricsRes.data);
+      }
+      if (catRes.success) {
+        setCategories(catRes.data);
       }
     } finally {
       setLoadingList(false);
@@ -147,6 +162,13 @@ export default function ExpensesClient() {
   useEffect(() => {
     loadExpenses();
   }, [loadExpenses]);
+
+  const loadCategoriesOnly = async () => {
+    const res = await getExpenseCategoriesAction();
+    if (res.success) {
+      setCategories(res.data);
+    }
+  };
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,6 +211,87 @@ export default function ExpensesClient() {
     } finally {
       isSubmittingRef.current = false;
       setSubmitting(false);
+    }
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    if (isSubmittingRef.current || creatingCategory) return;
+
+    isSubmittingRef.current = true;
+    setCreatingCategory(true);
+    setCategoryError('');
+
+    try {
+      const res = await createExpenseCategoryAction(newCategoryName.trim());
+      if (res.success) {
+        setNewCategoryName('');
+        await loadCategoriesOnly();
+      } else {
+        setCategoryError(res.error || 'Failed to create category');
+      }
+    } finally {
+      isSubmittingRef.current = false;
+      setCreatingCategory(false);
+    }
+  };
+
+  const handleCreateCategoryInline = async (target: 'add' | 'edit') => {
+    if (!inlineNewCatName.trim() || inlineCatLoading) return;
+
+    setInlineCatLoading(true);
+    try {
+      const res = await createExpenseCategoryAction(inlineNewCatName.trim());
+      if (res.success) {
+        const createdName = res.data.name;
+        if (target === 'add') setCategory(createdName);
+        if (target === 'edit') setEditCategory(createdName);
+        setInlineNewCatName('');
+        setIsAddingNewCatInline(false);
+        await loadCategoriesOnly();
+      } else {
+        if (target === 'add') setAddError(res.error || 'Failed to create category');
+        if (target === 'edit') setEditError(res.error || 'Failed to create category');
+      }
+    } finally {
+      setInlineCatLoading(false);
+    }
+  };
+
+  const handleUpdateCategory = async (catId: string) => {
+    if (!editingCatName.trim()) return;
+    if (isSubmittingRef.current || savingCatEdit) return;
+
+    isSubmittingRef.current = true;
+    setSavingCatEdit(true);
+    setCategoryError('');
+
+    try {
+      const res = await updateExpenseCategoryAction(catId, editingCatName.trim());
+      if (res.success) {
+        setEditingCatId(null);
+        setEditingCatName('');
+        await loadCategoriesOnly();
+      } else {
+        setCategoryError(res.error || 'Failed to update category');
+      }
+    } finally {
+      isSubmittingRef.current = false;
+      setSavingCatEdit(false);
+    }
+  };
+
+  const handleDeleteCategory = async (catId: string) => {
+    try {
+      const res = await deleteExpenseCategoryAction(catId);
+      if (res.success) {
+        await loadCategoriesOnly();
+      } else {
+        setCategoryError(res.error || 'Failed to delete category');
+      }
+    } catch (err: any) {
+      setCategoryError(err?.message || 'Error deleting category');
     }
   };
 
@@ -340,11 +443,11 @@ export default function ExpensesClient() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           <button
             onClick={loadExpenses}
             disabled={loadingList}
-            className="p-2.5 bg-surface hover:bg-row-alt text-ink-muted hover:text-ink-primary border border-border rounded-xl transition shadow-2xs min-h-[40px] min-w-[40px] flex items-center justify-center"
+            className="p-2.5 bg-surface hover:bg-row-alt text-ink-muted hover:text-ink-primary border border-border rounded-xl transition shadow-2xs min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
             title="Refresh Ledger"
           >
             <RefreshCw className={`w-4 h-4 ${loadingList ? 'animate-spin' : ''}`} />
@@ -352,10 +455,22 @@ export default function ExpensesClient() {
 
           <button
             onClick={() => {
+              setCategoryError('');
+              setIsCategoriesModalOpen(true);
+            }}
+            className="px-3.5 py-2.5 bg-surface hover:bg-row-alt text-ink-primary border border-border rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs min-h-[40px] cursor-pointer"
+          >
+            <Tags className="w-4 h-4 text-accent" />
+            <span>Categories</span>
+          </button>
+
+          <button
+            onClick={() => {
               setAddError('');
+              setIsAddingNewCatInline(false);
               setIsAddModalOpen(true);
             }}
-            className="flex-1 sm:flex-none px-4 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs min-h-[40px]"
+            className="flex-1 sm:flex-none px-4 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs min-h-[40px] cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Record Expense</span>
@@ -399,10 +514,10 @@ export default function ExpensesClient() {
       </div>
 
       {/* Category Pills Filter Bar */}
-      <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+      <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar items-center">
         <button
           onClick={() => setSelectedExpenseCat('ALL')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap min-h-[34px] ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap min-h-[34px] cursor-pointer ${
             selectedExpenseCat === 'ALL'
               ? 'bg-accent text-white shadow-xs'
               : 'bg-surface text-ink-muted hover:text-ink-primary border border-border hover:bg-row-alt'
@@ -410,22 +525,32 @@ export default function ExpensesClient() {
         >
           All Categories ({expenses.length})
         </button>
-        {CATEGORY_PRESETS.map((cat) => {
-          const count = expenses.filter(e => e.category === cat).length;
+        {categories.map((cat) => {
+          const count = expenses.filter(e => e.category.toLowerCase() === cat.name.toLowerCase()).length;
           return (
             <button
-              key={cat}
-              onClick={() => setSelectedExpenseCat(cat)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap min-h-[34px] ${
-                selectedExpenseCat === cat
+              key={cat.id}
+              onClick={() => setSelectedExpenseCat(cat.name)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap min-h-[34px] cursor-pointer ${
+                selectedExpenseCat.toLowerCase() === cat.name.toLowerCase()
                   ? 'bg-accent text-white shadow-xs'
                   : 'bg-surface text-ink-muted hover:text-ink-primary border border-border hover:bg-row-alt'
               }`}
             >
-              {cat} {count > 0 ? `(${count})` : ''}
+              {cat.name} {count > 0 ? `(${count})` : ''}
             </button>
           );
         })}
+        <button
+          onClick={() => {
+            setCategoryError('');
+            setIsCategoriesModalOpen(true);
+          }}
+          className="px-3 py-1.5 rounded-xl text-xs font-bold text-accent border border-dashed border-accent/40 hover:border-accent bg-accent/5 hover:bg-accent/10 transition whitespace-nowrap min-h-[34px] flex items-center gap-1 cursor-pointer"
+        >
+          <FolderPlus className="w-3.5 h-3.5" />
+          <span>+ Add Category</span>
+        </button>
       </div>
 
       {/* Expenses Ledger Directory Cards */}
@@ -490,7 +615,7 @@ export default function ExpensesClient() {
                       {!item.is_voided && (
                         <button
                           onClick={(e) => openEditModal(e, item)}
-                          className="p-1.5 text-ink-muted hover:text-accent hover:bg-row-alt rounded-lg transition"
+                          className="p-1.5 text-ink-muted hover:text-accent hover:bg-row-alt rounded-lg transition cursor-pointer"
                           title="Edit Expense"
                         >
                           <Pencil className="w-3.5 h-3.5" />
@@ -500,7 +625,7 @@ export default function ExpensesClient() {
                       {!item.is_voided && (
                         <button
                           onClick={(e) => openVoidModal(e, item)}
-                          className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                          className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
                           title="Void Expense"
                         >
                           <Ban className="w-3.5 h-3.5" />
@@ -509,7 +634,7 @@ export default function ExpensesClient() {
 
                       <button
                         onClick={(e) => openDeleteModal(e, item)}
-                        className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                        className="p-1.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
                         title="Delete Record"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -545,7 +670,7 @@ export default function ExpensesClient() {
               <button 
                 onClick={() => setIsAddModalOpen(false)} 
                 disabled={submitting}
-                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full"
+                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -560,32 +685,79 @@ export default function ExpensesClient() {
 
             <form onSubmit={handleAddExpense} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-bold text-ink-primary mb-1">
-                  Category <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  type="text" 
-                  value={category} 
-                  onChange={e => setCategory(e.target.value)} 
-                  required
-                  placeholder="e.g. Electricity, Packaging, Staff Tea..."
-                  className="w-full p-2.5 border border-border rounded-xl text-xs bg-surface text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none" 
-                />
-
-                {/* Preset Category Chips */}
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {CATEGORY_PRESETS.map((preset) => (
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-bold text-ink-primary">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  {!isAddingNewCatInline ? (
                     <button
-                      key={preset}
                       type="button"
-                      onClick={() => setCategory(preset)}
-                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition ${
-                        category === preset
-                          ? 'bg-accent/15 border-accent text-accent font-bold'
-                          : 'bg-row-alt border-border text-ink-muted hover:text-ink-primary'
+                      onClick={() => {
+                        setIsAddingNewCatInline(true);
+                        setInlineNewCatName('');
+                      }}
+                      className="text-[11px] font-bold text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <PlusCircle className="w-3 h-3" /> + Create New Category
+                    </button>
+                  ) : null}
+                </div>
+
+                {isAddingNewCatInline ? (
+                  <div className="flex gap-2 mb-2 p-2 bg-row-alt/60 rounded-xl border border-border">
+                    <input 
+                      type="text"
+                      value={inlineNewCatName}
+                      onChange={e => setInlineNewCatName(e.target.value)}
+                      placeholder="Enter new category name..."
+                      className="flex-1 p-2 border border-border rounded-lg text-xs bg-surface text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCreateCategoryInline('add')}
+                      disabled={inlineCatLoading || !inlineNewCatName.trim()}
+                      className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-lg shadow-2xs disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                    >
+                      {inlineCatLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      <span>Add</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCatInline(false)}
+                      className="p-1.5 text-ink-muted hover:text-ink-primary rounded-lg cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <input 
+                    type="text" 
+                    value={category} 
+                    onChange={e => setCategory(e.target.value)} 
+                    required
+                    placeholder="Type or select a category below..."
+                    className="w-full p-2.5 border border-border rounded-xl text-xs bg-surface text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none" 
+                  />
+                )}
+
+                {/* Preset & User Category Chips */}
+                <div className="flex flex-wrap gap-1.5 mt-2 max-h-28 overflow-y-auto p-1">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setCategory(cat.name);
+                        setIsAddingNewCatInline(false);
+                      }}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                        category.toLowerCase() === cat.name.toLowerCase()
+                          ? 'bg-accent border-accent text-white font-bold shadow-2xs'
+                          : 'bg-row-alt border-border text-ink-muted hover:text-ink-primary hover:border-gray-400'
                       }`}
                     >
-                      {preset}
+                      {cat.name}
                     </button>
                   ))}
                 </div>
@@ -613,7 +785,7 @@ export default function ExpensesClient() {
                   <button
                     type="button"
                     onClick={() => setMethod('CASH')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                       method === 'CASH'
                         ? 'bg-accent border-accent text-white shadow-xs'
                         : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
@@ -625,7 +797,7 @@ export default function ExpensesClient() {
                   <button
                     type="button"
                     onClick={() => setMethod('UPI')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                       method === 'UPI'
                         ? 'bg-accent border-accent text-white shadow-xs'
                         : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
@@ -663,20 +835,140 @@ export default function ExpensesClient() {
                   type="button" 
                   onClick={() => setIsAddModalOpen(false)} 
                   disabled={submitting}
-                  className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition"
+                  className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={submitting} 
-                  className="px-5 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition"
+                  className="px-5 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition cursor-pointer"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />} 
                   <span>Record Expense</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGE CATEGORIES MODAL with z-[200] */}
+      {isCategoriesModalOpen && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto cursor-pointer animate-in fade-in duration-150"
+          onClick={(e) => { if (e.target === e.currentTarget && !creatingCategory && !savingCatEdit) setIsCategoriesModalOpen(false); }}
+        >
+          <div 
+            className="bg-surface rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-border animate-in zoom-in-95 duration-150 cursor-default space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-border">
+              <h2 className="text-base font-bold text-ink-primary flex items-center gap-2">
+                <Tags className="w-5 h-5 text-accent" />
+                Manage Expense Categories
+              </h2>
+              <button 
+                onClick={() => setIsCategoriesModalOpen(false)} 
+                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {categoryError && (
+              <div className="p-3 bg-red-50 text-red-700 text-xs font-semibold rounded-xl border border-red-200 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{categoryError}</span>
+              </div>
+            )}
+
+            {/* Add Category Form */}
+            <form onSubmit={handleCreateCategory} className="flex gap-2">
+              <input 
+                type="text" 
+                value={newCategoryName}
+                onChange={e => setNewCategoryName(e.target.value)}
+                placeholder="New category name (e.g. Courier, Legal...)"
+                required
+                className="flex-1 p-2.5 border border-border rounded-xl text-xs bg-surface text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={creatingCategory || !newCategoryName.trim()}
+                className="px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl shadow-xs disabled:opacity-50 flex items-center gap-1.5 transition cursor-pointer"
+              >
+                {creatingCategory ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                <span>Create</span>
+              </button>
+            </form>
+
+            {/* Categories List */}
+            <div className="space-y-1.5 max-h-64 overflow-y-auto divide-y divide-border border border-border rounded-xl p-2 bg-row-alt/30">
+              {categories.map((cat) => (
+                <div key={cat.id} className="pt-1.5 pb-1.5 first:pt-0 last:pb-0 flex items-center justify-between gap-2">
+                  {editingCatId === cat.id ? (
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <input 
+                        type="text" 
+                        value={editingCatName}
+                        onChange={e => setEditingCatName(e.target.value)}
+                        className="flex-1 p-1.5 border border-border rounded-lg text-xs bg-surface text-ink-primary"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleUpdateCategory(cat.id)}
+                        disabled={savingCatEdit}
+                        className="p-1.5 bg-accent text-white rounded-lg text-xs font-bold cursor-pointer"
+                        title="Save Name"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setEditingCatId(null)}
+                        className="p-1.5 text-ink-muted hover:text-ink-primary rounded-lg cursor-pointer"
+                        title="Cancel"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-xs font-bold text-ink-primary truncate">{cat.name}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            setEditingCatId(cat.id);
+                            setEditingCatName(cat.name);
+                          }}
+                          className="p-1 text-ink-muted hover:text-accent hover:bg-row-alt rounded-md transition cursor-pointer"
+                          title="Rename Category"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(cat.id)}
+                          className="p-1 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded-md transition cursor-pointer"
+                          title="Delete Category"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button 
+                type="button" 
+                onClick={() => setIsCategoriesModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold bg-row-alt hover:bg-row-alt/80 text-ink-primary rounded-xl transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -696,7 +988,7 @@ export default function ExpensesClient() {
               <button 
                 onClick={() => setIsEditModalOpen(false)} 
                 disabled={editing}
-                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full"
+                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -711,14 +1003,81 @@ export default function ExpensesClient() {
 
             <form onSubmit={handleSaveEdit} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-bold text-ink-primary mb-1">Category <span className="text-red-500">*</span></label>
-                <input 
-                  type="text" 
-                  value={editCategory} 
-                  onChange={e => setEditCategory(e.target.value)} 
-                  required
-                  className="w-full p-2.5 border border-border rounded-xl text-xs bg-surface text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none" 
-                />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-bold text-ink-primary">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  {!isAddingNewCatInline && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingNewCatInline(true);
+                        setInlineNewCatName('');
+                      }}
+                      className="text-[11px] font-bold text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <PlusCircle className="w-3 h-3" /> + Create New Category
+                    </button>
+                  )}
+                </div>
+
+                {isAddingNewCatInline ? (
+                  <div className="flex gap-2 mb-2 p-2 bg-row-alt/60 rounded-xl border border-border">
+                    <input 
+                      type="text"
+                      value={inlineNewCatName}
+                      onChange={e => setInlineNewCatName(e.target.value)}
+                      placeholder="Enter new category name..."
+                      className="flex-1 p-2 border border-border rounded-lg text-xs bg-surface text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCreateCategoryInline('edit')}
+                      disabled={inlineCatLoading || !inlineNewCatName.trim()}
+                      className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-lg shadow-2xs disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                    >
+                      {inlineCatLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      <span>Add</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCatInline(false)}
+                      className="p-1.5 text-ink-muted hover:text-ink-primary rounded-lg cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <input 
+                    type="text" 
+                    value={editCategory} 
+                    onChange={e => setEditCategory(e.target.value)} 
+                    required
+                    className="w-full p-2.5 border border-border rounded-xl text-xs bg-surface text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none" 
+                  />
+                )}
+
+                {/* Preset & User Category Chips */}
+                <div className="flex flex-wrap gap-1.5 mt-2 max-h-24 overflow-y-auto p-1">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setEditCategory(cat.name);
+                        setIsAddingNewCatInline(false);
+                      }}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                        editCategory.toLowerCase() === cat.name.toLowerCase()
+                          ? 'bg-accent border-accent text-white font-bold shadow-2xs'
+                          : 'bg-row-alt border-border text-ink-muted hover:text-ink-primary hover:border-gray-400'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
@@ -740,7 +1099,7 @@ export default function ExpensesClient() {
                   <button
                     type="button"
                     onClick={() => setEditMethod('CASH')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                       editMethod === 'CASH'
                         ? 'bg-accent border-accent text-white shadow-xs'
                         : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
@@ -752,7 +1111,7 @@ export default function ExpensesClient() {
                   <button
                     type="button"
                     onClick={() => setEditMethod('UPI')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                       editMethod === 'UPI'
                         ? 'bg-accent border-accent text-white shadow-xs'
                         : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
@@ -790,14 +1149,14 @@ export default function ExpensesClient() {
                   type="button" 
                   onClick={() => setIsEditModalOpen(false)} 
                   disabled={editing}
-                  className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition"
+                  className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={editing} 
-                  className="px-5 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition"
+                  className="px-5 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition cursor-pointer"
                 >
                   {editing && <Loader2 className="w-3.5 h-3.5 animate-spin" />} 
                   <span>Save Changes</span>
@@ -854,7 +1213,7 @@ export default function ExpensesClient() {
                 type="button"
                 onClick={() => setIsVoidModalOpen(false)} 
                 disabled={voiding}
-                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition"
+                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -862,7 +1221,7 @@ export default function ExpensesClient() {
                 type="button"
                 onClick={handleVoidExpense} 
                 disabled={voiding} 
-                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition"
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition cursor-pointer"
               >
                 {voiding && <Loader2 className="w-3.5 h-3.5 animate-spin" />} 
                 <span>Confirm Void</span>
@@ -902,7 +1261,7 @@ export default function ExpensesClient() {
                 type="button"
                 onClick={() => setIsDeleteModalOpen(false)}
                 disabled={deleting}
-                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl"
+                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl cursor-pointer"
               >
                 Cancel
               </button>
@@ -910,7 +1269,7 @@ export default function ExpensesClient() {
                 type="button"
                 onClick={handleDeleteExpense}
                 disabled={deleting}
-                className="px-5 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition flex items-center gap-1.5"
+                className="px-5 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
               >
                 {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>Yes, Delete</span>

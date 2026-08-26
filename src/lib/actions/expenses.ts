@@ -298,3 +298,142 @@ export async function getExpensesSummaryMetricsAction(): Promise<
     return { success: false, error: err.message || 'Failed to calculate expense metrics' };
   }
 }
+
+const expenseCategorySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, 'Category name must be at least 2 characters')
+    .max(50, 'Category name cannot exceed 50 characters')
+});
+
+export async function getExpenseCategoriesAction(): Promise<ExpenseActionResult<{ id: string; name: string }[]>> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('expense_categories')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data || [] };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to fetch expense categories';
+    return { success: false, error: message };
+  }
+}
+
+export async function createExpenseCategoryAction(
+  name: string
+): Promise<ExpenseActionResult<{ id: string; name: string }>> {
+  try {
+    const parsed = expenseCategorySchema.safeParse({ name });
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0].message };
+    }
+
+    const trimmed = parsed.data.name;
+    const supabase = createClient();
+
+    // Check if an inactive category with same name exists to reactivate it cleanly
+    const { data: existing } = await supabase
+      .from('expense_categories')
+      .select('id, is_active')
+      .ilike('name', trimmed)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.is_active) {
+        return { success: false, error: 'Category already exists' };
+      }
+      // Reactivate previously soft-deleted category
+      const { data: reactivated, error: reactivateErr } = await supabase
+        .from('expense_categories')
+        .update({ is_active: true, name: trimmed, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+        .select('id, name')
+        .single();
+
+      if (reactivateErr) return { success: false, error: reactivateErr.message };
+
+      revalidatePath('/expenses');
+      revalidatePath('/expenses/[id]');
+      return { success: true, data: reactivated };
+    }
+
+    const { data, error } = await supabase
+      .from('expense_categories')
+      .insert({ name: trimmed })
+      .select('id, name')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') return { success: false, error: 'Category already exists' };
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/expenses');
+    revalidatePath('/expenses/[id]');
+    return { success: true, data };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to create category';
+    return { success: false, error: message };
+  }
+}
+
+export async function updateExpenseCategoryAction(
+  id: string,
+  name: string
+): Promise<ExpenseActionResult<{ id: string; name: string }>> {
+  try {
+    const parsed = expenseCategorySchema.safeParse({ name });
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0].message };
+    }
+
+    const trimmed = parsed.data.name;
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+      .from('expense_categories')
+      .update({ name: trimmed, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('is_active', true)
+      .select('id, name')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') return { success: false, error: 'Category name already in use' };
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/expenses');
+    revalidatePath('/expenses/[id]');
+    return { success: true, data };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to update category';
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteExpenseCategoryAction(id: string): Promise<ExpenseActionResult<{ id: string }>> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('expense_categories')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('id')
+      .single();
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/expenses');
+    revalidatePath('/expenses/[id]');
+    return { success: true, data };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to delete category';
+    return { success: false, error: message };
+  }
+}

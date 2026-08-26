@@ -19,26 +19,19 @@ import {
   Loader2, 
   CheckCircle2, 
   X,
-  TrendingDown
+  TrendingDown,
+  PlusCircle,
+  Check
 } from 'lucide-react';
 import { 
   getExpenseDetailsAction, 
   updateExpenseAction, 
   voidExpenseAction, 
-  deleteExpenseAction 
+  deleteExpenseAction,
+  getExpenseCategoriesAction,
+  createExpenseCategoryAction
 } from '@/lib/actions/expenses';
 import { ExpenseItem, ExpensePaymentMethod } from '@/types/expenses';
-
-const CATEGORY_PRESETS = [
-  'Rent',
-  'Electricity & Utilities',
-  'Packaging Materials',
-  'Staff Tea & Refreshments',
-  'Logistics & Transport',
-  'Salaries & Advances',
-  'Store Maintenance',
-  'Miscellaneous'
-];
 
 const formatINR = (amount: number | string | null | undefined) => {
   const num = typeof amount === 'number' ? amount : parseFloat(String(amount || 0));
@@ -56,6 +49,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
   const isSubmittingRef = useRef(false);
 
   const [expense, setExpense] = useState<ExpenseItem | null>(null);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +62,11 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
   const [editDate, setEditDate] = useState('');
   const [editError, setEditError] = useState('');
   const [editing, setEditing] = useState(false);
+
+  // Quick Inline Category creation state inside Edit modal
+  const [isAddingNewCatInline, setIsAddingNewCatInline] = useState(false);
+  const [inlineNewCatName, setInlineNewCatName] = useState('');
+  const [inlineCatLoading, setInlineCatLoading] = useState(false);
 
   // Void Modal State
   const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
@@ -84,11 +83,17 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await getExpenseDetailsAction(id);
+      const [res, catRes] = await Promise.all([
+        getExpenseDetailsAction(id),
+        getExpenseCategoriesAction()
+      ]);
       if (res.success) {
         setExpense(res.data);
       } else {
         setError(res.error || 'Expense not found');
+      }
+      if (catRes.success) {
+        setCategories(catRes.data);
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to load expense details');
@@ -115,6 +120,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
     setEditAmount(expense.amount.toString());
     setEditMethod(expense.payment_method);
     setEditNotes(expense.notes || '');
+    setIsAddingNewCatInline(false);
     
     // Format timestamp for datetime-local
     const dt = new Date(expense.created_at);
@@ -123,6 +129,26 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
     
     setEditError('');
     setIsEditModalOpen(true);
+  };
+
+  const handleCreateCategoryInline = async () => {
+    if (!inlineNewCatName.trim() || inlineCatLoading) return;
+
+    setInlineCatLoading(true);
+    try {
+      const res = await createExpenseCategoryAction(inlineNewCatName.trim());
+      if (res.success) {
+        setEditCategory(res.data.name);
+        setInlineNewCatName('');
+        setIsAddingNewCatInline(false);
+        const catRes = await getExpenseCategoriesAction();
+        if (catRes.success) setCategories(catRes.data);
+      } else {
+        setEditError(res.error || 'Failed to create category');
+      }
+    } finally {
+      setInlineCatLoading(false);
+    }
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -285,7 +311,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
           {!expense.is_voided && (
             <button
               onClick={openEditModal}
-              className="px-4 py-2 bg-surface hover:bg-row-alt text-ink-primary border border-border rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-2xs min-h-[38px]"
+              className="px-4 py-2 bg-surface hover:bg-row-alt text-ink-primary border border-border rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-2xs min-h-[38px] cursor-pointer"
             >
               <Pencil className="w-3.5 h-3.5 text-accent" />
               <span>Edit Details</span>
@@ -299,7 +325,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
                 setVoidError(null);
                 setIsVoidModalOpen(true);
               }}
-              className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition min-h-[38px]"
+              className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition min-h-[38px] cursor-pointer"
             >
               <Ban className="w-3.5 h-3.5 text-red-600" />
               <span>Void Expense</span>
@@ -311,7 +337,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
               setDeleteError('');
               setIsDeleteModalOpen(true);
             }}
-            className="p-2.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded-xl border border-border transition min-h-[38px] min-w-[38px] flex items-center justify-center"
+            className="p-2.5 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded-xl border border-border transition min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
             title="Permanently Delete Expense"
           >
             <Trash2 className="w-4 h-4" />
@@ -401,7 +427,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
               <button 
                 onClick={() => setIsEditModalOpen(false)} 
                 disabled={editing}
-                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full"
+                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -416,15 +442,82 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
 
             <form onSubmit={handleSaveEdit} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-bold text-ink-primary mb-1">Category <span className="text-red-500">*</span></label>
-                <input 
-                  type="text" 
-                  value={editCategory} 
-                  onChange={e => setEditCategory(e.target.value)} 
-                  required
-                  placeholder="e.g. Electricity, Packaging..."
-                  className="w-full p-2.5 border border-border rounded-xl text-xs bg-surface text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none" 
-                />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-bold text-ink-primary">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  {!isAddingNewCatInline && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingNewCatInline(true);
+                        setInlineNewCatName('');
+                      }}
+                      className="text-[11px] font-bold text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <PlusCircle className="w-3 h-3" /> + Create New Category
+                    </button>
+                  )}
+                </div>
+
+                {isAddingNewCatInline ? (
+                  <div className="flex gap-2 mb-2 p-2 bg-row-alt/60 rounded-xl border border-border">
+                    <input 
+                      type="text"
+                      value={inlineNewCatName}
+                      onChange={e => setInlineNewCatName(e.target.value)}
+                      placeholder="Enter new category name..."
+                      className="flex-1 p-2 border border-border rounded-lg text-xs bg-surface text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateCategoryInline}
+                      disabled={inlineCatLoading || !inlineNewCatName.trim()}
+                      className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-lg shadow-2xs disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                    >
+                      {inlineCatLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      <span>Add</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCatInline(false)}
+                      className="p-1.5 text-ink-muted hover:text-ink-primary rounded-lg cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <input 
+                    type="text" 
+                    value={editCategory} 
+                    onChange={e => setEditCategory(e.target.value)} 
+                    required
+                    placeholder="Type or select a category below..."
+                    className="w-full p-2.5 border border-border rounded-xl text-xs bg-surface text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none" 
+                  />
+                )}
+
+                {/* Preset & User Category Chips */}
+                <div className="flex flex-wrap gap-1.5 mt-2 max-h-24 overflow-y-auto p-1">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setEditCategory(cat.name);
+                        setIsAddingNewCatInline(false);
+                      }}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                        editCategory.toLowerCase() === cat.name.toLowerCase()
+                          ? 'bg-accent border-accent text-white font-bold shadow-2xs'
+                          : 'bg-row-alt border-border text-ink-muted hover:text-ink-primary hover:border-gray-400'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
@@ -447,7 +540,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
                   <button
                     type="button"
                     onClick={() => setEditMethod('CASH')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                       editMethod === 'CASH'
                         ? 'bg-accent border-accent text-white shadow-xs'
                         : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
@@ -459,7 +552,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
                   <button
                     type="button"
                     onClick={() => setEditMethod('UPI')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                       editMethod === 'UPI'
                         ? 'bg-accent border-accent text-white shadow-xs'
                         : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
@@ -497,14 +590,14 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
                   type="button" 
                   onClick={() => setIsEditModalOpen(false)} 
                   disabled={editing}
-                  className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition"
+                  className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={editing} 
-                  className="px-5 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition"
+                  className="px-5 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition cursor-pointer"
                 >
                   {editing && <Loader2 className="w-3.5 h-3.5 animate-spin" />} 
                   <span>Save Changes</span>
@@ -561,7 +654,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
                 type="button"
                 onClick={() => setIsVoidModalOpen(false)} 
                 disabled={voiding}
-                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition"
+                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -569,7 +662,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
                 type="button"
                 onClick={handleVoidExpense} 
                 disabled={voiding} 
-                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition"
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition cursor-pointer"
               >
                 {voiding && <Loader2 className="w-3.5 h-3.5 animate-spin" />} 
                 <span>Confirm Void</span>
@@ -609,7 +702,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
                 type="button"
                 onClick={() => setIsDeleteModalOpen(false)}
                 disabled={deleting}
-                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl"
+                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl cursor-pointer"
               >
                 Cancel
               </button>
@@ -617,7 +710,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
                 type="button"
                 onClick={handleDeleteExpense}
                 disabled={deleting}
-                className="px-5 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition flex items-center gap-1.5"
+                className="px-5 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
               >
                 {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>Yes, Delete</span>
