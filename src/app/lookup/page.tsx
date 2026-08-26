@@ -1,5 +1,8 @@
 'use client'
 
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ScanBarcode, Search, AlertCircle, Package, Camera, Loader2 } from 'lucide-react';
 import { searchVariantsAction } from '@/lib/actions/pos';

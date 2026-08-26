@@ -1,5 +1,8 @@
 'use client'
 
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
