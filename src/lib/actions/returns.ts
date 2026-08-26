@@ -178,6 +178,7 @@ export async function getRecentReturnsAction(
       .from('returns')
       .select(`
         id,
+        invoice_id,
         quantity,
         sets_quantity,
         loose_quantity,
@@ -187,7 +188,7 @@ export async function getRecentReturnsAction(
         return_type,
         notes,
         created_at,
-        invoices (invoice_number),
+        invoices (id, invoice_number),
         variants (
           name, 
           barcode,

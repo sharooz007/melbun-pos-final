@@ -100,6 +100,7 @@ export interface ProcessReturnResult {
 
 export interface RecentReturnAuditItem {
   id: string;
+  invoice_id?: string;
   quantity: number;
   sets_quantity?: number;
   loose_quantity?: number;
@@ -110,6 +111,7 @@ export interface RecentReturnAuditItem {
   notes: string | null;
   created_at: string;
   invoices: {
+    id?: string;
     invoice_number: string;
   };
   variants: {
