@@ -51,8 +51,8 @@ export default function Sidebar() {
     <>
       <aside className="fixed bottom-0 left-0 right-0 z-[100] bg-ink-primary border-t border-white/10 md:relative md:w-[240px] md:flex md:flex-col md:h-[100dvh] md:border-r md:border-t-0 shrink-0 pb-safe">
         <div className="hidden md:flex p-6 items-center gap-3">
-          <div className="w-8 h-8 bg-accent rounded-[8px] flex items-center justify-center font-bold text-white shadow-sm">S</div>
-          <span className="text-white font-bold tracking-tight text-[18px]">SLYD POS</span>
+          <div className="w-8 h-8 bg-accent rounded-[8px] flex items-center justify-center font-bold text-white shadow-sm">M</div>
+          <span className="text-white font-bold tracking-tight text-[18px]">Melbon POS</span>
         </div>
         
         {/* DESKTOP: Full Navigation List */}
@@ -122,8 +122,8 @@ export default function Sidebar() {
         <div className="md:hidden fixed inset-0 z-[90] bg-ink-primary flex flex-col animate-in fade-in zoom-in-95 duration-200 pb-[80px]">
           <div className="p-6 flex items-center justify-between border-b border-white/10">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-accent rounded-[8px] flex items-center justify-center font-bold text-white shadow-sm">S</div>
-              <span className="text-white font-bold tracking-tight text-[18px]">SLYD POS</span>
+              <div className="w-8 h-8 bg-accent rounded-[8px] flex items-center justify-center font-bold text-white shadow-sm">M</div>
+              <span className="text-white font-bold tracking-tight text-[18px]">Melbon POS</span>
             </div>
             <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-white/60 hover:text-white bg-white/5 rounded-full">
               <X className="w-6 h-6" />

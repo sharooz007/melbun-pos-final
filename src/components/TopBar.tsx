@@ -22,7 +22,7 @@ export default function TopBar() {
       
       {/* CENTER: Typography Logo (Mobile Only, Desktop Sidebar already has it) */}
       <div className="flex-1 flex items-center justify-center">
-        <span className="font-extrabold tracking-tighter text-[18px] text-ink-primary md:hidden">SLYD</span>
+        <span className="font-extrabold tracking-tighter text-[18px] text-ink-primary md:hidden">MELBON</span>
       </div>
       
       {/* RIGHT: Price & Stock Action */}

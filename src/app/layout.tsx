@@ -7,7 +7,7 @@ import Sidebar from "@/components/Sidebar";
 import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
-  title: "SLYD POS",
+  title: "Melbon POS",
   description: "High-density Point of Sale Interface",
 };
 
