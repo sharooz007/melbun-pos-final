@@ -41,12 +41,19 @@ export default function CameraScanner({
         scannerRef.current = new Html5Qrcode("reader", {
           formatsToSupport: [
             Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.QR_CODE,
             Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.QR_CODE
           ],
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          },
           verbose: false
         });
       }
@@ -76,7 +83,6 @@ export default function CameraScanner({
       // Select camera configuration
       let cameraConfig: any;
       if (devices.length > 1 && devices[activeIdx]) {
-        // Use deviceId without strict exact constraint for broad mobile compatibility
         cameraConfig = devices[activeIdx].id;
       } else {
         cameraConfig = { facingMode: activeFacing };
@@ -85,9 +91,19 @@ export default function CameraScanner({
       await scanner.start(
         cameraConfig,
         {
-          fps: 15,
-          qrbox: { width: 280, height: 160 },
+          fps: 20,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            // Dynamic rectangular scan window optimized for 1D horizontal retail barcodes
+            const width = Math.floor(viewfinderWidth * 0.85);
+            const height = Math.floor(viewfinderHeight * 0.55);
+            return { width: Math.max(220, width), height: Math.max(120, height) };
+          },
           aspectRatio: 1.0,
+          videoConstraints: {
+            facingMode: activeFacing,
+            width: { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720, max: 1080 }
+          }
         },
         (decodedText) => {
           const now = Date.now();
@@ -100,6 +116,9 @@ export default function CameraScanner({
 
           lastScanTimeRef.current = now;
           lastScannedCodeRef.current = decodedText;
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            try { navigator.vibrate(80); } catch (_) {}
+          }
           if (isMountedRef.current) {
             setLastScannedBarcode(decodedText);
           }
