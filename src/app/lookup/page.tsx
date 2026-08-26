@@ -116,16 +116,16 @@ export default function LookupPage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-4xl w-full mx-auto space-y-8">
       <header className="text-center space-y-2">
-        <div className="mx-auto w-16 h-16 bg-[#8B0000]/10 rounded-2xl flex items-center justify-center text-[#8B0000] mb-4">
+        <div className="mx-auto w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center text-accent mb-4">
           <ScanBarcode className="w-8 h-8" />
         </div>
         <h1 className="text-3xl font-bold text-gray-900">Price & Stock Scanner</h1>
         <p className="text-gray-500">Scan a barcode or search by name to instantly view price and availability.</p>
       </header>
 
-      <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto flex gap-3">
+      <form onSubmit={handleSearch} className="relative max-w-2xl w-full mx-auto flex gap-3">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
             <Search className="w-6 h-6 text-gray-400" />
@@ -136,13 +136,13 @@ export default function LookupPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Scan barcode or type product name..."
-            className="w-full pl-12 pr-12 py-4 text-lg border-2 border-gray-200 rounded-2xl focus:border-[#8B0000] focus:ring-4 focus:ring-[#8B0000]/10 outline-none transition-all"
+            className="w-full pl-12 pr-12 py-4 text-lg border-2 border-gray-200 rounded-2xl focus:border-accent focus:ring-4 focus:ring-accent/10 outline-none transition-all"
             autoFocus
           />
           <button 
             type="button"
             onClick={() => setIsCameraOpen(true)}
-            className="absolute inset-y-2 right-2 px-4 text-gray-500 hover:text-[#8B0000] hover:bg-red-50 rounded-xl transition-colors flex items-center justify-center"
+            className="absolute inset-y-2 right-2 px-4 text-gray-500 hover:text-accent hover:bg-red-50 rounded-xl transition-colors flex items-center justify-center"
             title="Scan with Camera"
           >
             <Camera className="w-6 h-6" />
@@ -151,7 +151,7 @@ export default function LookupPage() {
         <button 
           type="submit" 
           disabled={loading}
-          className="px-8 bg-[#8B0000] text-white font-bold text-lg rounded-2xl hover:bg-[#A52A2A] transition-colors disabled:opacity-50 flex items-center gap-2"
+          className="px-8 bg-accent text-white font-bold text-lg rounded-2xl hover:bg-accent-hover transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Lookup'}
         </button>
@@ -179,7 +179,7 @@ export default function LookupPage() {
                 </div>
               </div>
               <div className="text-right space-y-2">
-                <div className="text-3xl font-bold text-[#8B0000]">
+                <div className="text-3xl font-bold text-accent">
                   {formatINR(variant.price)}
                 </div>
                 <div className="flex gap-2 justify-end">

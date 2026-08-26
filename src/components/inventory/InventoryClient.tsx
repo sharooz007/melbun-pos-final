@@ -19,7 +19,9 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
   const [isCatModalOpen, setCatModalOpen] = useState(false)
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  const toggleProduct = (productId: string) => { setExpandedProducts(prev => { const n = new Set(prev); if(n.has(productId)) n.delete(productId); else n.add(productId); return n; }); };
   const [currentPage, setCurrentPage] = useState<number>(1)
   const PAGE_SIZE = 15;
 
@@ -257,76 +259,79 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
         <div className="divide-y divide-border">
           {paginatedProducts.map(p => (
             <div key={p.id} className="p-4 hover:bg-row-alt/50 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="font-bold text-[15px] text-ink-primary flex items-center gap-2">
-                    {p.name}
-                    <span className="text-[11px] font-normal text-ink-muted bg-surface border border-border px-2 py-0.5 rounded-[4px]">
-                      {categories.find(c => c.id === p.category_id)?.name || 'Uncategorized'}
-                    </span>
-                  </h3>
-                  <div className="text-[12px] text-ink-muted mt-0.5">
-                    {p.pieces_per_set} pcs per set • {p.variants.length} variant{p.variants.length !== 1 ? 's' : ''} • Total Stock: {p.totalStock} pcs
+              <div className="flex justify-between items-start cursor-pointer" onClick={() => toggleProduct(p.id)}>
+                <div className="flex items-start gap-3">
+                  <button className="mt-0.5 text-ink-muted hover:text-ink-primary transition-colors">
+                    {expandedProducts.has(p.id) ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                  </button>
+                  <div>
+                    <h3 className="font-bold text-[15px] text-ink-primary flex items-center gap-2">
+                      {p.name}
+                      <span className="text-[11px] font-normal text-ink-muted bg-surface border border-border px-2 py-0.5 rounded-[4px]">
+                        {categories.find(c => c.id === p.category_id)?.name || 'Uncategorized'}
+                      </span>
+                    </h3>
+                    <div className="text-[12px] text-ink-muted mt-0.5">
+                      {p.pieces_per_set} pcs per set • {p.variants.length} variant{p.variants.length !== 1 ? 's' : ''} • Total Stock: {p.totalStock} pcs
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 ml-4 shrink-0" onClick={e => e.stopPropagation()}>
                   <button 
                     onClick={() => handleEditClick(p)}
-                    className="text-[12px] text-ink-muted hover:text-[#A83D24] font-medium"
+                    className="text-[12px] text-ink-muted hover:text-accent font-medium px-2 py-1"
                   >
                     Edit
                   </button>
                   <span className="text-border">|</span>
                   <button 
                     onClick={() => handleOpenDeleteModal(p.id, p.name)}
-                    className="text-[12px] text-ink-muted hover:text-red-600 font-medium"
+                    className="text-[12px] text-ink-muted hover:text-red-600 font-medium px-2 py-1"
                   >
                     Delete
                   </button>
                 </div>
               </div>
 
-              {/* Nested Variant Breakdown Table */}
-              {p.variants && p.variants.length > 0 && (
-                <div className="mt-3 bg-row-alt rounded-[8px] p-3 border border-border/60 overflow-x-auto">
-                  <table className="w-full text-[12px]">
-                    <thead>
-                      <tr className="text-ink-muted text-left border-b border-border/50">
-                        <th className="pb-2 font-medium">Variant</th>
-                        <th className="pb-2 font-medium">Barcode</th>
-                        <th className="pb-2 font-medium text-right">Cost Price</th>
-                        <th className="pb-2 font-medium text-right">Selling Price</th>
-                        <th className="pb-2 font-medium text-right">Stock (Sets)</th>
-                        <th className="pb-2 font-medium text-right">Stock (Loose)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/30">
-                      {p.variants.map((v: any) => {
-                        const stockSets = Number(v.stock_sets || 0);
-                        const loosePcs = Math.max(0, Number(v.stock_quantity || 0) - (stockSets * Number(p.pieces_per_set || 1)));
-                        return (
-                          <tr key={v.id} className="hover:bg-surface/50">
-                            <td className="py-2 font-medium">{v.name}</td>
-                            <td className="py-2 text-ink-muted font-mono">{v.barcode || '-'}</td>
-                            <td className="py-2 text-right">₹{v.cost_price}</td>
-                            <td className="py-2 text-right font-medium">
+              {/* Nested Variant Breakdown (Accordion Content) */}
+              {expandedProducts.has(p.id) && p.variants && p.variants.length > 0 && (
+                <div className="mt-4 ml-8 bg-surface rounded-[8px] border border-border divide-y divide-border overflow-hidden">
+                  {p.variants.map((v: any) => {
+                    const stockSets = Number(v.stock_sets || 0);
+                    const loosePcs = Math.max(0, Number(v.stock_quantity || 0) - (stockSets * Number(p.pieces_per_set || 1)));
+                    return (
+                      <div key={v.id} className="p-3 hover:bg-row-alt flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-[14px] text-ink-primary">{v.name}</div>
+                          <div className="text-[12px] text-ink-muted font-mono mt-0.5">{v.barcode || 'No barcode'}</div>
+                        </div>
+                        <div className="flex gap-4 sm:gap-6">
+                          <div className="flex flex-col sm:items-end">
+                            <span className="text-[10px] uppercase font-bold text-ink-muted">Price</span>
+                            <div className="font-medium text-[14px]">
                               {Number(v.cost_price) > 0 && Number(v.selling_price) < Number(v.cost_price) ? (
-                                <span className="text-amber-700 font-bold flex items-center justify-end gap-1">
+                                <span className="text-amber-700 font-bold flex flex-col sm:flex-row sm:items-center gap-1">
                                   <span>₹{v.selling_price}</span>
                                   <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-bold">Loss</span>
                                 </span>
                               ) : (
-                                <span className="text-emerald-600 font-medium">₹{v.selling_price}</span>
+                                <span className="text-emerald-600 font-medium font-mono">₹{v.selling_price}</span>
                               )}
-                            </td>
-                            <td className="py-2 text-right font-medium">{stockSets} sets</td>
-                            <td className="py-2 text-right font-medium">{loosePcs} pcs <span className="text-[11px] text-ink-muted font-normal">(Total: {v.stock_quantity})</span></td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:items-end">
+                            <span className="text-[10px] uppercase font-bold text-ink-muted">Stock</span>
+                            <div className="font-medium text-[14px] font-mono">{stockSets} <span className="text-ink-muted text-[11px] font-sans">sets</span></div>
+                          </div>
+                          <div className="flex flex-col sm:items-end">
+                            <span className="text-[10px] uppercase font-bold text-ink-muted">Loose</span>
+                            <div className="font-medium text-[14px] font-mono">{loosePcs} <span className="text-ink-muted text-[11px] font-sans">pcs</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

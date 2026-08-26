@@ -240,12 +240,12 @@ export default function ReturnsPage() {
   };
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 space-y-8 max-w-7xl w-full mx-auto">
       {/* Header */}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <RotateCcw className="w-8 h-8 text-[#8B0000]" />
+            <RotateCcw className="w-8 h-8 text-accent" />
             Process Customer Returns
           </h1>
           <p className="text-gray-500 mt-1">
@@ -295,13 +295,13 @@ export default function ReturnsPage() {
               value={invoiceQuery}
               onChange={(e) => setInvoiceQuery(e.target.value)}
               placeholder="Enter Invoice Number (e.g. MELBUN/26-27/0001 or INV-1001)..."
-              className="w-full pl-11 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden font-mono"
+              className="w-full pl-11 pr-4 py-3 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent focus:outline-hidden font-mono"
             />
           </div>
           <button
             type="submit"
             disabled={searching}
-            className="px-6 py-3 bg-[#8B0000] hover:bg-[#A52A2A] text-white font-semibold rounded-xl shadow-xs disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            className="px-6 py-3 bg-accent hover:bg-accent-hover text-white font-semibold rounded-xl shadow-xs disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
           >
             {searching ? (
               <>
@@ -322,7 +322,7 @@ export default function ReturnsPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-gray-100">
             <div className="space-y-1">
               <div className="flex items-center gap-3">
-                <Receipt className="w-6 h-6 text-[#8B0000]" />
+                <Receipt className="w-6 h-6 text-accent" />
                 <h2 className="text-xl font-bold text-gray-900 font-mono">
                   {invoice.invoice_number}
                 </h2>
@@ -437,7 +437,7 @@ export default function ReturnsPage() {
                           <button
                             type="button"
                             onClick={() => openReturnModal(item)}
-                            className="px-3.5 py-1.5 text-xs font-semibold text-white bg-[#8B0000] hover:bg-[#A52A2A] rounded-lg shadow-xs transition-colors"
+                            className="px-3.5 py-1.5 text-xs font-semibold text-white bg-accent hover:bg-accent-hover rounded-lg shadow-xs transition-colors"
                           >
                             Return Item
                           </button>
@@ -459,7 +459,7 @@ export default function ReturnsPage() {
             {/* Modal Header */}
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-red-100 text-[#8B0000] rounded-xl">
+                <div className="p-2.5 bg-red-100 text-accent rounded-xl">
                   <RotateCcw className="w-6 h-6" />
                 </div>
                 <div>
@@ -541,7 +541,7 @@ export default function ReturnsPage() {
                                 setReturnLoose(maxAllowedLoose);
                               }
                             }}
-                            className="w-full text-sm p-2.5 border border-gray-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                            className="w-full text-sm p-2.5 border border-gray-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-accent focus:outline-hidden disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                           />
                         </div>
                         <div>
@@ -555,7 +555,7 @@ export default function ReturnsPage() {
                               const maxAllowedLoose = Math.max(0, remainingPieces - (returnSets * piecesPerSet));
                               setReturnLoose(Math.min(maxAllowedLoose, Math.max(0, parseInt(e.target.value || '0', 10))));
                             }}
-                            className="w-full text-sm p-2.5 border border-gray-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden"
+                            className="w-full text-sm p-2.5 border border-gray-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-accent focus:outline-hidden"
                           />
                         </div>
                       </div>
@@ -567,7 +567,7 @@ export default function ReturnsPage() {
                           max={remainingPieces}
                           value={returnLoose}
                           onChange={(e) => setReturnLoose(Math.min(remainingPieces, Math.max(0, parseInt(e.target.value || '0', 10))))}
-                          className="w-full text-sm p-2.5 border border-gray-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden"
+                          className="w-full text-sm p-2.5 border border-gray-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-accent focus:outline-hidden"
                         />
                         <button
                           type="button"
@@ -629,7 +629,7 @@ export default function ReturnsPage() {
                             : refundMethod === method
                             ? method === 'STORE_CREDIT'
                               ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                              : 'bg-[#8B0000] text-white border-[#8B0000] shadow-xs'
+                              : 'bg-accent text-white border-accent shadow-xs'
                             : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                         }`}
                       >
@@ -695,7 +695,7 @@ export default function ReturnsPage() {
                   placeholder="e.g. Size exchange requested, stitching defect reported by buyer..."
                   rows={2}
                   maxLength={500}
-                  className="w-full text-sm p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden"
+                  className="w-full text-sm p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent focus:outline-hidden"
                 />
               </div>
 
@@ -726,7 +726,7 @@ export default function ReturnsPage() {
                     </div>
                     <div className="text-right">
                       <span className="text-xs text-gray-500 block">Prorated Refund Amount</span>
-                      <span className="text-lg font-bold font-mono text-[#8B0000]">
+                      <span className="text-lg font-bold font-mono text-accent">
                         {formatINR(estimatedRefund)}
                       </span>
                     </div>
@@ -749,7 +749,7 @@ export default function ReturnsPage() {
                 type="button"
                 onClick={handleConfirmReturn}
                 disabled={submittingReturn}
-                className="px-5 py-2 text-sm font-semibold text-white bg-[#8B0000] hover:bg-[#A52A2A] rounded-lg shadow-xs disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="px-5 py-2 text-sm font-semibold text-white bg-accent hover:bg-accent-hover rounded-lg shadow-xs disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
                 {submittingReturn ? (
                   <>
@@ -772,7 +772,7 @@ export default function ReturnsPage() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
           <div className="flex items-center gap-2">
-            <RotateCcw className="w-4 h-4 text-[#8B0000]" />
+            <RotateCcw className="w-4 h-4 text-accent" />
             <h2 className="text-base font-bold text-gray-900">Recent Returns & Refund Ledger</h2>
           </div>
           <span className="text-xs font-semibold text-gray-500">
@@ -836,7 +836,7 @@ export default function ReturnsPage() {
                         {ret.refund_method}
                       </span>
                     </td>
-                    <td className="py-3.5 px-5 text-right font-mono font-bold text-[#8B0000]">
+                    <td className="py-3.5 px-5 text-right font-mono font-bold text-accent">
                       {formatINR(Number(ret.total_refund_amount))}
                     </td>
                     <td className="py-3.5 px-5 text-xs text-gray-500 max-w-[200px] truncate" title={ret.notes || ''}>

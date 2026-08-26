@@ -125,7 +125,7 @@ export default function CustomersClient() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search customer name or phone..."
-            className="w-full pl-10 pr-4 py-3 bg-white rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+            className="w-full pl-10 pr-4 py-3 bg-white rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </div>
 
@@ -150,7 +150,7 @@ export default function CustomersClient() {
             setAddError('');
             setIsAddModalOpen(true);
           }}
-          className="px-4 py-3 bg-[#A83D24] hover:bg-[#91321C] text-white rounded-[8px] text-[13px] font-bold flex items-center gap-2 transition-colors shadow-xs"
+          className="px-4 py-3 bg-accent hover:bg-[#1D4ED8] text-white rounded-[8px] text-[13px] font-bold flex items-center gap-2 transition-colors shadow-xs"
         >
           <UserPlus className="w-4 h-4" />
           New Customer
@@ -160,9 +160,9 @@ export default function CustomersClient() {
       <div className="flex-1 bg-white rounded-[12px] overflow-hidden flex flex-col shadow-sm border border-border">
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 text-ink-muted animate-spin" /></div>
+            <div className="p-4 md:p-8 flex justify-center"><Loader2 className="w-6 h-6 text-ink-muted animate-spin" /></div>
           ) : customers.length === 0 ? (
-            <div className="p-8 text-center text-ink-muted text-[14px]">No customers found.</div>
+            <div className="p-4 md:p-8 text-center text-ink-muted text-[14px]">No customers found.</div>
           ) : (
             <div className="divide-y divide-border">
               {customers.map((c) => (
@@ -221,7 +221,7 @@ export default function CustomersClient() {
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-[#A83D24]" />
+                <UserPlus className="w-5 h-5 text-accent" />
                 Register New Customer
               </h3>
               <button
@@ -250,7 +250,7 @@ export default function CustomersClient() {
                   placeholder="e.g. Ramesh Kumar / Sharma Textiles"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
 
@@ -263,7 +263,7 @@ export default function CustomersClient() {
                   placeholder="10-digit mobile number"
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
 
@@ -276,7 +276,7 @@ export default function CustomersClient() {
                   placeholder="15-digit GSTIN (e.g. 29AAAAA0000A1Z5)"
                   value={newGstin}
                   onChange={(e) => setNewGstin(e.target.value.toUpperCase())}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
 
@@ -289,7 +289,7 @@ export default function CustomersClient() {
                   placeholder="Shop / warehouse address"
                   value={newAddress}
                   onChange={(e) => setNewAddress(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
 
@@ -305,7 +305,7 @@ export default function CustomersClient() {
                 <button
                   type="submit"
                   disabled={isAdding}
-                  className="px-5 py-2 bg-[#A83D24] hover:bg-[#91321C] text-white rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50"
+                  className="px-5 py-2 bg-accent hover:bg-[#1D4ED8] text-white rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50"
                 >
                   {isAdding && <Loader2 className="w-4 h-4 animate-spin" />}
                   Create Customer

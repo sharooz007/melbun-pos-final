@@ -203,7 +203,7 @@ export default function LabelsPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+    <div className="p-6 max-w-[1600px] w-full mx-auto space-y-6">
       {/* ========================================================================= */}
       {/* 1. SCREEN-ONLY CONTROLS & HEADER (HIDDEN ON PRINT)                        */}
       {/* ========================================================================= */}
@@ -212,7 +212,7 @@ export default function LabelsPage() {
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <div>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-[#8B0000]/10 text-[#8B0000] rounded-xl">
+              <div className="p-2.5 bg-accent/10 text-accent rounded-xl">
                 <Tag className="w-6 h-6" />
               </div>
               <div>
@@ -236,7 +236,7 @@ export default function LabelsPage() {
               type="button"
               onClick={handlePrint}
               disabled={totalLabelCount === 0}
-              className="flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-[#8B0000] hover:bg-[#A52A2A] rounded-xl shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-accent hover:bg-accent-hover rounded-xl shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
             >
               <Printer className="w-4 h-4" />
               Print {totalLabelCount > 0 ? `(${totalLabelCount} Labels)` : ''}
@@ -258,7 +258,7 @@ export default function LabelsPage() {
                 <button
                   type="button"
                   onClick={fillAllFromStock}
-                  className="text-xs font-semibold text-[#8B0000] hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-accent hover:underline flex items-center gap-1"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   Add All In-Stock
@@ -279,7 +279,7 @@ export default function LabelsPage() {
                     performSearch(e.currentTarget.value.trim());
                   }
                 }}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000]"
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
               />
             </div>
 
@@ -328,7 +328,7 @@ export default function LabelsPage() {
                       <button
                         type="button"
                         onClick={() => addToQueue(variant, 1)}
-                        className="px-2.5 py-1.5 bg-white border border-gray-200 hover:bg-[#8B0000] hover:text-white hover:border-[#8B0000] text-gray-700 rounded-lg text-xs font-medium transition-colors shrink-0 flex items-center gap-1"
+                        className="px-2.5 py-1.5 bg-white border border-gray-200 hover:bg-accent hover:text-white hover:border-accent text-gray-700 rounded-lg text-xs font-medium transition-colors shrink-0 flex items-center gap-1"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         {inQueue ? `+1 (${inQueue.quantity})` : 'Add'}
@@ -347,7 +347,7 @@ export default function LabelsPage() {
                 <Layers className="w-4 h-4 text-gray-500" />
                 Print Queue ({queue.length} items)
               </h2>
-              <span className="text-xs font-semibold px-2 py-0.5 bg-[#8B0000]/10 text-[#8B0000] rounded-full">
+              <span className="text-xs font-semibold px-2 py-0.5 bg-accent/10 text-accent rounded-full">
                 {totalLabelCount} labels total
               </span>
             </div>
@@ -356,7 +356,7 @@ export default function LabelsPage() {
               <div className="py-16 text-center border-2 border-dashed border-gray-100 rounded-xl space-y-2">
                 <Tag className="w-8 h-8 text-gray-300 mx-auto" />
                 <p className="text-sm font-medium text-gray-500">Queue is empty</p>
-                <p className="text-xs text-gray-400 max-w-[200px] mx-auto">
+                <p className="text-xs text-gray-400 max-w-[200px] w-full mx-auto">
                   Search and add products from the left to build your print batch.
                 </p>
               </div>
@@ -440,7 +440,7 @@ export default function LabelsPage() {
                     onClick={() => setLayoutMode(layout.id as LabelLayoutMode)}
                     className={`p-2.5 rounded-xl border text-center transition-all ${
                       layoutMode === layout.id
-                        ? 'border-[#8B0000] bg-[#8B0000]/5 text-[#8B0000] font-bold shadow-xs'
+                        ? 'border-accent bg-accent/5 text-accent font-bold shadow-xs'
                         : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
                     }`}
                   >
@@ -474,7 +474,7 @@ export default function LabelsPage() {
                       onChange={(e) =>
                         setConfig((prev) => ({ ...prev, [item.key]: e.target.checked }))
                       }
-                      className="rounded text-[#8B0000] focus:ring-[#8B0000] w-4 h-4"
+                      className="rounded text-accent focus:ring-accent w-4 h-4"
                     />
                     <span className="text-gray-700 font-medium">{item.label}</span>
                   </label>
@@ -493,7 +493,7 @@ export default function LabelsPage() {
                   value={config.customHeader || ''}
                   onChange={(e) => setConfig((prev) => ({ ...prev, customHeader: e.target.value }))}
                   placeholder="e.g. MELBUN"
-                  className="w-full p-2 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-[#8B0000] focus:border-[#8B0000] font-medium"
+                  className="w-full p-2 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-accent focus:border-accent font-medium"
                 />
               </div>
             )}
@@ -513,7 +513,7 @@ export default function LabelsPage() {
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, barcodeHeight: parseInt(e.target.value, 10) }))
                 }
-                className="w-full accent-[#8B0000]"
+                className="w-full accent-accent"
               />
             </div>
           </div>

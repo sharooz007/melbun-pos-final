@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import { InventoryClient } from '@/components/inventory/InventoryClient'
 import { ShieldAlert } from 'lucide-react'
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 export default async function InventoryPage() {
   const supabase = createClient()
@@ -31,7 +32,7 @@ export default async function InventoryPage() {
 
   if (variantsError) {
     return (
-      <div className="p-10 max-w-7xl mx-auto">
+      <div className="p-10 max-w-7xl w-full mx-auto">
         <div className="p-6 text-red-700 bg-red-50 border border-red-200 rounded-[16px] flex items-center gap-3">
           <ShieldAlert className="w-5 h-5" />
           <p className="font-semibold text-[14px]">Database Error: {variantsError.message}</p>

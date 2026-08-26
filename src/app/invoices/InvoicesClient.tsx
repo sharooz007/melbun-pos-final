@@ -408,7 +408,7 @@ export default function InvoicesClient({
             placeholder="Search invoice #, customer name, phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000]"
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
           />
           {isFetching && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -438,7 +438,7 @@ export default function InvoicesClient({
       {/* Mobile Invoices Card View (< 640px) */}
       <div className="block sm:hidden space-y-3">
         {invoices.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 bg-white rounded-xl border border-gray-200 text-xs">
+          <div className="p-4 md:p-8 text-center text-gray-400 bg-white rounded-xl border border-gray-200 text-xs">
             {isFetching ? 'Loading invoices...' : 'No invoices found.'}
           </div>
         ) : (
@@ -749,7 +749,7 @@ export default function InvoicesClient({
                 type="button"
                 onClick={handleConfirmVoid}
                 disabled={loading}
-                className="px-5 py-2 text-sm font-semibold text-white bg-[#8B0000] hover:bg-[#A52A2A] rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-5 py-2 text-sm font-semibold text-white bg-accent hover:bg-accent-hover rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? 'Voiding & Restocking...' : 'Confirm Void'}
               </button>
@@ -768,7 +768,7 @@ export default function InvoicesClient({
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <Receipt className="w-5 h-5 text-[#8B0000]" />
+                  <Receipt className="w-5 h-5 text-accent" />
                   Invoice Details: <span className="font-mono">{inspectInvoice.invoice_number}</span>
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">

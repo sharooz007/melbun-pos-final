@@ -236,7 +236,7 @@ export default function CameraScanner({
             }
             onClose();
           }}
-          className="w-full max-w-md py-3.5 bg-[#8B0000] hover:bg-[#660000] text-white font-bold rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2"
+          className="w-full max-w-md py-3.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2"
         >
           <span>Done &amp; View Cart</span>
         </button>

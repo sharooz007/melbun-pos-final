@@ -1,6 +1,8 @@
 import React from 'react';
 import CustomerDetailClient from './CustomerDetailClient';
 
+export const runtime = 'edge';
+
 export const metadata = {
   title: 'Customer Details - MelbunPOS',
 };

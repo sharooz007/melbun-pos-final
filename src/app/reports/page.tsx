@@ -451,7 +451,7 @@ export default function ReportsPage() {
   }, [reportData, trendView]);
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-[1400px] mx-auto bg-[#F4F1EA] min-h-screen text-gray-900 font-sans">
+    <div className="p-6 md:p-8 space-y-6 max-w-[1400px] w-full mx-auto bg-[#F4F1EA] min-h-screen text-gray-900 font-sans">
       {/* Title */}
       <header>
         <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
@@ -488,7 +488,7 @@ export default function ReportsPage() {
                 onClick={() => setPreset(p)}
                 className={`px-5 py-2 rounded-xl text-xs font-bold transition ${
                   isActive
-                    ? 'bg-[#A83D24] text-white shadow-sm'
+                    ? 'bg-accent text-white shadow-sm'
                     : 'text-gray-700 hover:text-gray-900 hover:bg-white/60'
                 }`}
               >
@@ -508,7 +508,7 @@ export default function ReportsPage() {
                 required
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#A83D24]/20 focus:border-[#A83D24] outline-none"
+                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
               />
             </div>
             <div className="flex-1 min-w-[200px]">
@@ -518,13 +518,13 @@ export default function ReportsPage() {
                 required
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#A83D24]/20 focus:border-[#A83D24] outline-none"
+                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
               />
             </div>
             <div className="pt-5">
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-[#A83D24] hover:bg-[#8e331e] text-white font-bold text-xs rounded-xl shadow-sm transition"
+                className="px-6 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold text-xs rounded-xl shadow-sm transition"
               >
                 Apply Range
               </button>
@@ -559,7 +559,7 @@ export default function ReportsPage() {
 
       {loading && !reportData ? (
         <div className="py-20 flex flex-col items-center justify-center text-gray-400 gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-[#A83D24]" />
+          <Loader2 className="w-8 h-8 animate-spin text-accent" />
           <span className="text-sm font-medium">Generating financial reports...</span>
         </div>
       ) : (
@@ -580,7 +580,7 @@ export default function ReportsPage() {
                     {reportData?.invoice_count || 0} invoices
                   </span>
                 </div>
-                <div className="p-2.5 bg-red-50 text-[#A83D24] rounded-xl">
+                <div className="p-2.5 bg-red-50 text-accent rounded-xl">
                   <TrendingUp className="w-5 h-5" />
                 </div>
               </div>
@@ -750,7 +750,7 @@ export default function ReportsPage() {
               <div>
                 <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1.5">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#A83D24]"></span> UPI
+                    <span className="w-2 h-2 rounded-full bg-accent"></span> UPI
                   </span>
                   <span className="font-mono">
                     {formatINR(reportData?.payment_breakdown?.upi_amount)} · {reportData?.payment_breakdown?.upi_percent || 0}%
@@ -758,7 +758,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                   <div 
-                    className="bg-[#A83D24] h-full rounded-full transition-all duration-500" 
+                    className="bg-accent h-full rounded-full transition-all duration-500" 
                     style={{ width: `${Math.min(100, Math.max(0, reportData?.payment_breakdown?.upi_percent || 0))}%` }}
                   />
                 </div>
@@ -797,7 +797,7 @@ export default function ReportsPage() {
                 <button
                   onClick={() => setTrendView('day')}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                    trendView === 'day' ? 'bg-[#A83D24] text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    trendView === 'day' ? 'bg-accent text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   Day wise
@@ -805,7 +805,7 @@ export default function ReportsPage() {
                 <button
                   onClick={() => setTrendView('month')}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                    trendView === 'month' ? 'bg-[#A83D24] text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    trendView === 'month' ? 'bg-accent text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   Month wise
@@ -909,7 +909,7 @@ export default function ReportsPage() {
                       onClick={() => handleTabChange(t.key)}
                       className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                         isActive
-                          ? 'bg-[#A83D24] text-white shadow-sm'
+                          ? 'bg-accent text-white shadow-sm'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >

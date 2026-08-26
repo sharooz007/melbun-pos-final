@@ -181,7 +181,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
   };
 
   if (loading) {
-    return <div className="p-8 flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-[#A83D24]" /></div>;
+    return <div className="p-8 flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
   }
 
   if (!customer) {
@@ -191,7 +191,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
   const creditBalance = Number(customer.credit_balance || 0);
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-8 max-w-5xl w-full mx-auto">
       <Link href="/customers" className="flex items-center gap-2 text-ink-muted hover:text-ink-primary font-medium text-[14px] mb-6 transition-colors">
         <ArrowLeft className="w-4 h-4" /> Back to Customers
       </Link>
@@ -202,7 +202,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
           <div>
             <h1 className="text-[28px] font-bold tracking-tight text-ink-primary mb-1 flex items-center gap-3">
               {customer.name}
-              <button onClick={openEditModal} className="p-1.5 text-gray-400 hover:text-[#A83D24] hover:bg-[#A83D24]/10 rounded-md transition-colors" title="Edit Customer">
+              <button onClick={openEditModal} className="p-1.5 text-gray-400 hover:text-accent hover:bg-accent/10 rounded-md transition-colors" title="Edit Customer">
                 <Pencil className="w-4 h-4" />
               </button>
               {customer.is_active === false && (
@@ -257,7 +257,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
           </div>
           <div className="text-right">
             {customer.address && <div className="text-[13px] text-ink-muted uppercase">{customer.address}</div>}
-            {customer.gstin && <div className="text-[13px] font-bold text-[#A83D24]">GSTIN: {customer.gstin}</div>}
+            {customer.gstin && <div className="text-[13px] font-bold text-accent">GSTIN: {customer.gstin}</div>}
           </div>
         </div>
 
@@ -298,9 +298,9 @@ export default function CustomerDetailClient({ id }: { id: string }) {
 
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex gap-2 mb-4">
-          <button onClick={() => setActiveTab('invoices')} className={`px-4 py-2 rounded-full border text-[13px] font-bold transition-colors ${activeTab === 'invoices' ? 'bg-[#A83D24] text-white border-[#A83D24]' : 'bg-white text-[#A83D24] border-[#A83D24] hover:bg-orange-50'}`}>Invoices ({invoices.length})</button>
-          <button onClick={() => setActiveTab('payments')} className={`px-4 py-2 rounded-full border text-[13px] font-bold transition-colors ${activeTab === 'payments' ? 'bg-[#A83D24] text-white border-[#A83D24]' : 'bg-white text-[#A83D24] border-[#A83D24] hover:bg-orange-50'}`}>Payments ({payments.length})</button>
-          <button onClick={() => setActiveTab('returns')} className={`px-4 py-2 rounded-full border text-[13px] font-bold transition-colors ${activeTab === 'returns' ? 'bg-[#A83D24] text-white border-[#A83D24]' : 'bg-white text-[#A83D24] border-[#A83D24] hover:bg-orange-50'}`}>Returns ({returns.length})</button>
+          <button onClick={() => setActiveTab('invoices')} className={`px-4 py-2 rounded-full border text-[13px] font-bold transition-colors ${activeTab === 'invoices' ? 'bg-accent text-white border-accent' : 'bg-white text-accent border-accent hover:bg-orange-50'}`}>Invoices ({invoices.length})</button>
+          <button onClick={() => setActiveTab('payments')} className={`px-4 py-2 rounded-full border text-[13px] font-bold transition-colors ${activeTab === 'payments' ? 'bg-accent text-white border-accent' : 'bg-white text-accent border-accent hover:bg-orange-50'}`}>Payments ({payments.length})</button>
+          <button onClick={() => setActiveTab('returns')} className={`px-4 py-2 rounded-full border text-[13px] font-bold transition-colors ${activeTab === 'returns' ? 'bg-accent text-white border-accent' : 'bg-white text-accent border-accent hover:bg-orange-50'}`}>Returns ({returns.length})</button>
           <button onClick={() => setActiveTab('credit')} className={`px-4 py-2 rounded-full border text-[13px] font-bold transition-colors ${activeTab === 'credit' ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-emerald-700 border-emerald-700 hover:bg-emerald-50'}`}>Credit Ledger ({creditLedger.length})</button>
         </div>
 
@@ -312,7 +312,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
                   {invoices.map((inv) => (
                     <div key={inv.id} className="flex justify-between items-center p-5">
                       <div>
-                        <div className="font-mono font-bold text-[14px] text-[#A83D24] mb-1">{inv.invoice_number}</div>
+                        <div className="font-mono font-bold text-[14px] text-accent mb-1">{inv.invoice_number}</div>
                         <div className="text-[12px] text-ink-muted">{new Date(inv.created_at).toLocaleString()}</div>
                       </div>
                       <div className="flex items-center gap-6">
@@ -340,7 +340,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
                             <button onClick={() => handleVoidClick(inv)} className="px-4 py-1.5 border border-border text-ink-primary hover:bg-gray-50 rounded-full text-[12px] font-bold transition-colors">Void</button>
                           )}
                           {inv.status !== 'Paid' && inv.status !== 'Void' && inv.status !== 'Refunded' && inv.due_amount > 0 && (
-                            <button onClick={() => handlePayClick(inv)} className="px-4 py-1.5 border border-[#A83D24] text-[#A83D24] hover:bg-orange-50 rounded-full text-[12px] font-bold transition-colors">Pay Tab</button>
+                            <button onClick={() => handlePayClick(inv)} className="px-4 py-1.5 border border-accent text-accent hover:bg-orange-50 rounded-full text-[12px] font-bold transition-colors">Pay Tab</button>
                           )}
                         </div>
                       </div>
@@ -559,7 +559,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
                 value={payAmount} 
                 onChange={e => setPayAmount(e.target.value)} 
                 max={selectedInvoice.due_amount} 
-                className="w-full p-3 border border-border rounded-[8px] font-mono text-[16px] font-bold text-[#A83D24]" 
+                className="w-full p-3 border border-border rounded-[8px] font-mono text-[16px] font-bold text-accent" 
               />
             </div>
 
@@ -577,13 +577,13 @@ export default function CustomerDetailClient({ id }: { id: string }) {
                 )}
                 <button 
                   onClick={() => handleSwitchPayMethod('CASH')} 
-                  className={`p-2.5 border rounded-[8px] font-bold text-[12px] flex flex-col items-center gap-1 ${payMethod === 'CASH' ? 'bg-[#A83D24] border-[#A83D24] text-white' : 'hover:bg-gray-50'}`}
+                  className={`p-2.5 border rounded-[8px] font-bold text-[12px] flex flex-col items-center gap-1 ${payMethod === 'CASH' ? 'bg-accent border-accent text-white' : 'hover:bg-gray-50'}`}
                 >
                   <span>CASH</span>
                 </button>
                 <button 
                   onClick={() => handleSwitchPayMethod('UPI')} 
-                  className={`p-2.5 border rounded-[8px] font-bold text-[12px] flex flex-col items-center gap-1 ${payMethod === 'UPI' ? 'bg-[#A83D24] border-[#A83D24] text-white' : 'hover:bg-gray-50'}`}
+                  className={`p-2.5 border rounded-[8px] font-bold text-[12px] flex flex-col items-center gap-1 ${payMethod === 'UPI' ? 'bg-accent border-accent text-white' : 'hover:bg-gray-50'}`}
                 >
                   <span>UPI</span>
                 </button>
@@ -592,7 +592,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
 
             <div className="flex justify-end gap-3">
               <button onClick={() => setIsPayModalOpen(false)} className="px-4 py-2 font-bold text-[13px]">Cancel</button>
-              <button onClick={submitPay} disabled={actionLoading} className="px-4 py-2 bg-[#A83D24] text-white font-bold text-[13px] rounded-[8px] flex items-center gap-2">
+              <button onClick={submitPay} disabled={actionLoading} className="px-4 py-2 bg-accent text-white font-bold text-[13px] rounded-[8px] flex items-center gap-2">
                 {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />} Confirm Payment
               </button>
             </div>
@@ -630,7 +630,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-ink-muted hover:bg-surface text-[13px] font-medium rounded-[8px]">Cancel</button>
-              <button onClick={handleEditCustomer} disabled={actionLoading} className="px-4 py-2 bg-[#A83D24] text-white font-bold text-[13px] rounded-[8px] flex items-center gap-2">
+              <button onClick={handleEditCustomer} disabled={actionLoading} className="px-4 py-2 bg-accent text-white font-bold text-[13px] rounded-[8px] flex items-center gap-2">
                 {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />} Save
               </button>
             </div>

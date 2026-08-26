@@ -133,7 +133,7 @@ export default function LedgerClient({
             Back to Inventory
           </Link>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Clock className="w-6 h-6 text-[#8B0000]" />
+            <Clock className="w-6 h-6 text-accent" />
             Stock History Ledger
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
@@ -152,7 +152,7 @@ export default function LedgerClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by product, variant, barcode, notes..."
-            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-xs font-medium text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] outline-none"
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-xs font-medium text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
           />
         </div>
 

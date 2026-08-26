@@ -346,12 +346,12 @@ export default function ExpensesPage() {
   const voidedCount = metricsSummary ? metricsSummary.voidedCount : expenses.filter((e) => e.is_voided).length;
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 space-y-8 max-w-7xl w-full mx-auto">
       {/* Header */}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <TrendingDown className="w-8 h-8 text-[#8B0000]" />
+            <TrendingDown className="w-8 h-8 text-accent" />
             Expenses Management
           </h1>
           <p className="text-gray-500 mt-1">
@@ -421,7 +421,7 @@ export default function ExpensesPage() {
         {/* Form: Add Expense */}
         <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6">
           <div className="flex items-center gap-2 pb-4 border-b border-gray-100">
-            <PlusCircle className="w-5 h-5 text-[#8B0000]" />
+            <PlusCircle className="w-5 h-5 text-accent" />
             <h2 className="text-lg font-bold text-gray-900">Record New Expense</h2>
           </div>
 
@@ -437,7 +437,7 @@ export default function ExpensesPage() {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 required
-                className="w-full text-sm p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden"
+                className="w-full text-sm p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent focus:outline-hidden"
               />
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {CATEGORY_PRESETS.map((preset) => (
@@ -470,7 +470,7 @@ export default function ExpensesPage() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   required
-                  className="w-full text-sm pl-8 p-3 border border-gray-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden"
+                  className="w-full text-sm pl-8 p-3 border border-gray-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-accent focus:outline-hidden"
                 />
               </div>
             </div>
@@ -488,7 +488,7 @@ export default function ExpensesPage() {
                     onClick={() => setMethod(pm)}
                     className={`py-2.5 px-3 text-xs font-bold rounded-xl border flex flex-col items-center gap-1 transition-colors ${
                       method === pm
-                        ? 'bg-[#8B0000] text-white border-[#8B0000] shadow-xs'
+                        ? 'bg-accent text-white border-accent shadow-xs'
                         : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                     }`}
                   >
@@ -521,7 +521,7 @@ export default function ExpensesPage() {
                 type="datetime-local"
                 value={backdateInput}
                 onChange={(e) => setBackdateInput(e.target.value)}
-                className="w-full text-sm p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden"
+                className="w-full text-sm p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent focus:outline-hidden"
               />
               <p className="text-xs text-gray-400">Leave blank to stamp with the current time.</p>
             </div>
@@ -538,7 +538,7 @@ export default function ExpensesPage() {
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
                 maxLength={500}
-                className="w-full text-sm p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B0000] focus:outline-hidden"
+                className="w-full text-sm p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-accent focus:outline-hidden"
               />
             </div>
 
@@ -546,7 +546,7 @@ export default function ExpensesPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3 px-4 bg-[#8B0000] hover:bg-[#A52A2A] text-white font-semibold rounded-xl shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 bg-accent hover:bg-accent-hover text-white font-semibold rounded-xl shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <>
@@ -577,12 +577,12 @@ export default function ExpensesPage() {
                 placeholder="Search notes, category..."
                 value={expenseSearch}
                 onChange={(e) => setExpenseSearch(e.target.value)}
-                className="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B0000] w-36 sm:w-44"
+                className="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-accent w-36 sm:w-44"
               />
               <select
                 value={selectedExpenseCat}
                 onChange={(e) => setSelectedExpenseCat(e.target.value)}
-                className="text-xs px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B0000]"
+                className="text-xs px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 <option value="ALL">All Categories</option>
                 {CATEGORY_PRESETS.map(c => (
@@ -868,7 +868,7 @@ export default function ExpensesPage() {
                 type="button"
                 onClick={handleConfirmVoid}
                 disabled={voiding}
-                className="px-5 py-2 text-sm font-semibold text-white bg-[#8B0000] hover:bg-[#A52A2A] rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-5 py-2 text-sm font-semibold text-white bg-accent hover:bg-accent-hover rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {voiding ? 'Voiding Record...' : 'Confirm Void'}
               </button>

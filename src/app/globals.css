@@ -4,14 +4,14 @@
 
 @layer base {
   :root {
-    --canvas-base: #F0E9D3;
-    --pure-surface: #FFFFFF;
-    --ink-primary: #1F1A17;
-    --ink-muted: #5C534A;
-    --border-default: #E5DCC8;
-    --accent: #C23E00;
-    --accent-hover: #A03000;
-    --row-alt: #FDFAF3;
+    --canvas-base: #F8FAFC;     /* slate-50 */
+    --pure-surface: #FFFFFF;    /* white */
+    --ink-primary: #0F172A;     /* slate-900 */
+    --ink-muted: #64748B;       /* slate-500 */
+    --border-default: #E2E8F0;  /* slate-200 */
+    --accent: #2563EB;          /* blue-600 */
+    --accent-hover: #1D4ED8;    /* blue-700 */
+    --row-alt: #F1F5F9;         /* slate-100 */
   }
 
   body {
@@ -28,10 +28,23 @@
   }
   
   .surface-card {
-    @apply bg-[var(--pure-surface)] rounded-[16px] border border-[var(--border-default)] shadow-[0_1px_2px_rgba(31,26,23,0.04),0_4px_16px_rgba(31,26,23,0.04)];
+    @apply bg-[var(--pure-surface)] rounded-[16px] border border-[var(--border-default)] shadow-sm;
   }
 
   .input-control {
-    @apply w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--pure-surface)] px-4 py-2.5 text-[16px] text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--canvas-base)] transition-shadow duration-150;
+    @apply w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--pure-surface)] px-4 py-3 text-[16px] text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--canvas-base)] transition-shadow duration-150;
+  }
+}
+
+@layer utilities {
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }

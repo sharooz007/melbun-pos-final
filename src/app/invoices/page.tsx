@@ -3,11 +3,12 @@ import { getInvoicesPagedAction } from '@/lib/actions/invoices';
 import InvoicesClient from './InvoicesClient';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 export default async function InvoicesPage() {
   const initialResult = await getInvoicesPagedAction({ page: 1, pageSize: 25 });
   return (
-    <Suspense fallback={<div className="p-8 text-sm text-gray-500">Loading invoices...</div>}>
+    <Suspense fallback={<div className="p-4 md:p-8 text-sm text-gray-500">Loading invoices...</div>}>
       <InvoicesClient 
         initialInvoices={initialResult.data || []} 
         initialTotal={initialResult.total || 0}

@@ -60,6 +60,7 @@ function POSContent() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [resolvedCustomerId, setResolvedCustomerId] = useState<string | null>(null);
   const [customerCredit, setCustomerCredit] = useState<number>(0);
+  const [isMobileCheckoutOpen, setIsMobileCheckoutOpen] = useState(false);
   const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   
@@ -783,7 +784,7 @@ function POSContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-canvas overflow-hidden font-sans">
+    <div className="flex-1 flex flex-col min-h-0 bg-canvas overflow-hidden font-sans">
       {/* EDITING INVOICE PROMINENT TOP BANNER */}
       {editInvoiceId && (
         <div className="bg-amber-600 text-white px-4 py-2.5 flex items-center justify-between shadow-md shrink-0 border-b border-amber-700 animate-in fade-in">
@@ -817,9 +818,9 @@ function POSContent() {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden relative">
         {/* LEFT SECTION: Search & Cart Table */}
-        <div className="flex-1 flex flex-col min-w-0 border-r border-border">
+        <div className="flex-1 flex flex-col min-w-0 lg:border-r border-border h-full overflow-hidden">
           {/* Top Search Bar with Camera Scanner Button */}
           <div className="p-4 sm:p-6 bg-surface border-b border-border flex items-center gap-3">
             <div className="relative flex-1">
@@ -832,7 +833,7 @@ function POSContent() {
                 value={searchQuery}
                 onChange={e => handleSearchChange(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                className="w-full pl-12 pr-4 py-3 bg-row-alt border border-border rounded-[10px] text-[15px] focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                className="w-full pl-12 pr-4 py-3 bg-row-alt border border-border rounded-[10px] text-[15px] focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
               />
               {isSearching && (
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-ink-muted font-medium">
@@ -860,7 +861,7 @@ function POSContent() {
                         <div className="text-[12px] text-ink-muted">Barcode: {v.barcode || 'N/A'} • {v.pieces_per_set} pcs/set</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-[14px] text-[#A83D24]">₹{v.price.toFixed(2)}</div>
+                        <div className="font-bold text-[14px] text-accent">₹{v.price.toFixed(2)}</div>
                         <div className="text-[11px] text-gray-500">{v.stock_sets} sets / {v.stock_quantity} pcs</div>
                       </div>
                     </div>
@@ -874,7 +875,7 @@ function POSContent() {
               type="button"
               onClick={() => { setIsCameraOpen(true); setCameraStatusMessage(null); }}
               disabled={loading || isInitialLoadingInvoice}
-              className="px-4 py-3 bg-[#8B0000] hover:bg-[#660000] text-white rounded-[10px] font-bold text-xs sm:text-sm flex items-center gap-2 transition shadow-xs disabled:opacity-50 shrink-0"
+              className="px-4 py-3 bg-accent hover:bg-accent-hover text-white rounded-[10px] font-bold text-xs sm:text-sm flex items-center gap-2 transition shadow-xs disabled:opacity-50 shrink-0"
               title="Scan Barcodes with Mobile Camera"
             >
               <Camera className="w-5 h-5" />
@@ -898,7 +899,7 @@ function POSContent() {
           </div>
 
           {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3">
             {isInitialLoadingInvoice ? (
               <div className="h-full flex flex-col items-center justify-center text-ink-muted space-y-3">
                 <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
@@ -911,119 +912,157 @@ function POSContent() {
                 <p className="text-[13px]">Scan barcodes or search products to begin checkout</p>
               </div>
             ) : (
-              <div className="border border-border rounded-[12px] overflow-hidden bg-surface shadow-xs">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-border bg-row-alt text-[12px] font-bold text-ink-muted uppercase tracking-wider">
-                      <th className="py-3 px-4">Item</th>
-                      <th className="py-3 px-4 w-36 text-center">Packaged Sets</th>
-                      <th className="py-3 px-4 w-36 text-center">Loose Pcs</th>
-                      <th className="py-3 px-4 w-28 text-right">Price</th>
-                      <th className="py-3 px-4 w-28 text-right">Total</th>
-                      <th className="py-3 px-4 w-12 text-center"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border text-[14px]">
-                    {cart.map((item) => {
-                      const totalPcs = (item.sets_quantity * item.pieces_per_set) + item.loose_quantity;
-                      const itemTotal = totalPcs * item.price;
-                      const isOverSets = item.stock_sets !== undefined && item.sets_quantity > item.stock_sets;
-                      const isOverStock = item.stock_quantity !== undefined && totalPcs > item.stock_quantity;
-                      return (
-                        <tr key={item.variant_id} className="hover:bg-row-alt/50 transition-colors">
-                          <td className="py-4 px-4">
-                            <div className="font-bold text-ink-primary">{item.name}</div>
-                            <div className="text-[12px] text-ink-muted mt-0.5">
-                              {item.pieces_per_set} pcs/set • {totalPcs} pcs total
+              <div className="space-y-3">
+                {cart.map((item) => {
+                  const totalPcs = (item.sets_quantity * item.pieces_per_set) + item.loose_quantity;
+                  const itemTotal = totalPcs * item.price;
+                  const isOverSets = item.stock_sets !== undefined && item.sets_quantity > item.stock_sets;
+                  const isOverStock = item.stock_quantity !== undefined && totalPcs > item.stock_quantity;
+                  return (
+                    <div key={item.variant_id} className="bg-surface border border-border rounded-[16px] p-3.5 sm:p-4 space-y-3 shadow-xs hover:border-ink-muted transition-colors">
+                      {/* Row 1: Title & Delete */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-[15px] sm:text-[16px] text-ink-primary truncate">{item.name}</div>
+                          <div className="text-[12px] text-ink-muted mt-0.5">
+                            {item.pieces_per_set} pcs/set • {totalPcs} pcs total
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleRemoveItem(item.variant_id)}
+                          className="p-1.5 text-ink-muted hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                          title="Remove line item"
+                        >
+                          <Trash2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                        </button>
+                      </div>
+
+                      {/* Row 2: Unit Price & Line Total */}
+                      <div className="flex items-center justify-between bg-row-alt px-3 py-2 rounded-[10px]">
+                        <div className="text-[13px] font-mono font-semibold text-accent">
+                          ₹{item.price.toFixed(2)} <span className="text-[10px] text-ink-muted uppercase">/ pc</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">Total:</span>
+                          <span className="font-mono font-black text-[16px] sm:text-[18px] text-ink-primary">
+                            ₹{itemTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Warnings */}
+                      {(isOverSets || isOverStock) && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {isOverSets && (
+                            <div className="text-[11px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200 inline-flex items-center">
+                              ⚠️ Exceeds sets ({item.stock_sets} on hand)
                             </div>
-                            {isOverSets && (
-                              <div className="text-[11px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded mt-1 mr-1 inline-block">
-                                ⚠️ Exceeds sets ({item.stock_sets} on hand)
-                              </div>
-                            )}
-                            {isOverStock && !isOverSets && (
-                              <div className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded mt-1 inline-block">
-                                ⚠️ Exceeds stock ({item.stock_quantity} pcs on hand)
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-4 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button 
-                                type="button"
-                                onClick={() => handleUpdateItem(item.variant_id, 'sets_quantity', item.sets_quantity - 1)}
-                                className="w-9 h-9 sm:w-7 sm:h-7 bg-row-alt hover:bg-surface border border-border rounded flex items-center justify-center text-ink-muted hover:text-ink-primary transition-colors"
-                              >
-                                <Minus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                              </button>
-                              <input 
-                                type="number"
-                                min="0"
-                                value={item.sets_quantity}
-                                onFocus={e => e.target.select()}
-                                onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                                onChange={e => handleUpdateItem(item.variant_id, 'sets_quantity', parseInt(e.target.value) || 0)}
-                                className="w-14 sm:w-12 text-center p-1.5 sm:p-1 bg-surface border border-border rounded font-mono font-medium text-base sm:text-[13px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
-                              />
-                              <button 
-                                type="button"
-                                onClick={() => handleUpdateItem(item.variant_id, 'sets_quantity', item.sets_quantity + 1)}
-                                className="w-9 h-9 sm:w-7 sm:h-7 bg-row-alt hover:bg-surface border border-border rounded flex items-center justify-center text-ink-muted hover:text-ink-primary transition-colors"
-                              >
-                                <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                              </button>
+                          )}
+                          {isOverStock && !isOverSets && (
+                            <div className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-flex items-center">
+                              ⚠️ Exceeds stock ({item.stock_quantity} on hand)
                             </div>
-                          </td>
-                          <td className="py-4 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button 
-                                type="button"
-                                onClick={() => handleUpdateItem(item.variant_id, 'loose_quantity', item.loose_quantity - 1)}
-                                className="w-9 h-9 sm:w-7 sm:h-7 bg-row-alt hover:bg-surface border border-border rounded flex items-center justify-center text-ink-muted hover:text-ink-primary transition-colors"
-                              >
-                                <Minus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                              </button>
-                              <input 
-                                type="number"
-                                min="0"
-                                value={item.loose_quantity}
-                                onFocus={e => e.target.select()}
-                                onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                                onChange={e => handleUpdateItem(item.variant_id, 'loose_quantity', parseInt(e.target.value) || 0)}
-                                className="w-14 sm:w-12 text-center p-1.5 sm:p-1 bg-surface border border-border rounded font-mono font-medium text-base sm:text-[13px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
-                              />
-                              <button 
-                                type="button"
-                                onClick={() => handleUpdateItem(item.variant_id, 'loose_quantity', item.loose_quantity + 1)}
-                                className="w-9 h-9 sm:w-7 sm:h-7 bg-row-alt hover:bg-surface border border-border rounded flex items-center justify-center text-ink-muted hover:text-ink-primary transition-colors"
-                              >
-                                <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4 text-right font-mono text-ink-muted">₹{item.price.toFixed(2)}</td>
-                          <td className="py-4 px-4 text-right font-mono font-bold text-ink-primary">₹{itemTotal.toFixed(2)}</td>
-                          <td className="py-4 px-4 text-center">
+                          )}
+                        </div>
+                      )}
+
+                      {/* Row 3: Steppers (Full Width Grid) */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        {/* Sets Stepper */}
+                        <div className="bg-canvas border border-border rounded-[10px] p-2 flex flex-col items-center">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted mb-1.5">Sets</span>
+                          <div className="flex items-center justify-between w-full">
                             <button 
-                              onClick={() => handleRemoveItem(item.variant_id)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                              title="Remove line item"
+                              type="button"
+                              onClick={() => handleUpdateItem(item.variant_id, 'sets_quantity', item.sets_quantity - 1)}
+                              className="w-8 h-8 sm:w-9 sm:h-9 bg-surface hover:bg-row-alt border border-border rounded-[7px] flex items-center justify-center text-ink-primary transition-colors active:scale-95 shadow-xs"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Minus className="w-4 h-4" />
                             </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            <input 
+                              type="number"
+                              min="0"
+                              value={item.sets_quantity}
+                              onFocus={e => e.target.select()}
+                              onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                              onChange={e => handleUpdateItem(item.variant_id, 'sets_quantity', parseInt(e.target.value) || 0)}
+                              className="w-12 text-center py-1 bg-transparent font-mono font-bold text-[15px] focus:outline-none"
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => handleUpdateItem(item.variant_id, 'sets_quantity', item.sets_quantity + 1)}
+                              className="w-8 h-8 sm:w-9 sm:h-9 bg-surface hover:bg-row-alt border border-border rounded-[7px] flex items-center justify-center text-ink-primary transition-colors active:scale-95 shadow-xs"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Loose Stepper */}
+                        <div className="bg-canvas border border-border rounded-[10px] p-2 flex flex-col items-center">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-muted mb-1.5">Loose (Pcs)</span>
+                          <div className="flex items-center justify-between w-full">
+                            <button 
+                              type="button"
+                              onClick={() => handleUpdateItem(item.variant_id, 'loose_quantity', item.loose_quantity - 1)}
+                              className="w-8 h-8 sm:w-9 sm:h-9 bg-surface hover:bg-row-alt border border-border rounded-[7px] flex items-center justify-center text-ink-primary transition-colors active:scale-95 shadow-xs"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <input 
+                              type="number"
+                              min="0"
+                              value={item.loose_quantity}
+                              onFocus={e => e.target.select()}
+                              onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                              onChange={e => handleUpdateItem(item.variant_id, 'loose_quantity', parseInt(e.target.value) || 0)}
+                              className="w-12 text-center py-1 bg-transparent font-mono font-bold text-[15px] focus:outline-none"
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => handleUpdateItem(item.variant_id, 'loose_quantity', item.loose_quantity + 1)}
+                              className="w-8 h-8 sm:w-9 sm:h-9 bg-surface hover:bg-row-alt border border-border rounded-[7px] flex items-center justify-center text-ink-primary transition-colors active:scale-95 shadow-xs"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
+          </div>
+          
+          {/* MOBILE ONLY: Sticky Checkout Bar */}
+          <div className="lg:hidden shrink-0 p-4 pb-[88px] bg-surface border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.05)] z-40">
+            <button
+              onClick={() => setIsMobileCheckoutOpen(true)}
+              disabled={cart.length === 0}
+              className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-bold py-3.5 rounded-[12px] flex items-center justify-between px-6 transition-transform active:scale-[0.98]"
+            >
+              <span>Proceed to Checkout</span>
+              <span>₹{finalTotal.toFixed(2)}</span>
+            </button>
           </div>
         </div>
 
         {/* RIGHT SECTION: Customer, Totals & Checkout Panel */}
-        <div className="w-[420px] bg-surface flex flex-col shrink-0">
+        <div className={`
+          fixed inset-0 z-[110] bg-surface flex flex-col transform transition-transform duration-300 ease-out lg:relative lg:inset-auto lg:z-auto lg:w-[420px] lg:shrink-0 lg:translate-y-0 lg:border-l lg:border-border
+          ${isMobileCheckoutOpen ? 'translate-y-0' : 'translate-y-full'}
+        `}>
+          {/* MOBILE ONLY: Close Sheet Header */}
+          <div className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-row-alt">
+            <h2 className="text-[18px] font-bold text-ink-primary">Checkout</h2>
+            <button 
+              onClick={() => setIsMobileCheckoutOpen(false)}
+              className="p-2 bg-surface border border-border rounded-full shadow-sm"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
           <div className="p-6 border-b border-border flex items-center justify-between">
             <h2 className="text-[18px] font-bold text-ink-primary">
               {editInvoiceId ? 'Edit Invoice Details' : 'Sale Summary'}
@@ -1097,7 +1136,7 @@ function POSContent() {
                       setShowCustomerDropdown(true);
                     }}
                     onFocus={() => setShowCustomerDropdown(true)}
-                    className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                    className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                   />
 
                   <input 
@@ -1135,7 +1174,7 @@ function POSContent() {
                       }
                     }}
                     onFocus={() => setShowCustomerDropdown(true)}
-                    className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                    className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                   />
 
                   {showCustomerDropdown && customerSuggestions.length > 0 && (
@@ -1203,7 +1242,7 @@ function POSContent() {
                       type="button"
                       disabled={loading || isInitialLoadingInvoice}
                       onClick={() => setInvoiceDateStr('')}
-                      className="text-[11px] font-bold text-[#A83D24] hover:underline"
+                      className="text-[11px] font-bold text-accent hover:underline"
                     >
                       Reset to Real-time (Now)
                     </button>
@@ -1214,7 +1253,7 @@ function POSContent() {
                   value={invoiceDateStr}
                   disabled={loading || isInitialLoadingInvoice}
                   onChange={e => setInvoiceDateStr(e.target.value)}
-                  className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50 font-mono"
+                  className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[13px] focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 font-mono"
                 />
                 {invoiceDateStr ? (
                   <p className="text-[11px] text-amber-700 font-medium bg-amber-50 p-2 rounded-lg border border-amber-200">
@@ -1272,7 +1311,7 @@ function POSContent() {
                         }
                         setDiscountValue(val);
                       }}
-                      className="flex-1 p-2 bg-surface border border-border rounded-[8px] text-[14px] font-mono focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                      className="flex-1 p-2 bg-surface border border-border rounded-[8px] text-[14px] font-mono focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                     />
                   </div>
                   {discountAmount > subtotal && subtotal > 0 && (
@@ -1303,7 +1342,7 @@ function POSContent() {
                       value={roundOff} 
                       onFocus={e => e.target.select()}
                       onChange={e => setRoundOff(e.target.value)}
-                      className="w-full p-2 bg-surface border border-border rounded-[8px] text-[13px] font-mono focus:outline-none focus:ring-1 focus:ring-[#A83D24] disabled:opacity-50"
+                      className="w-full p-2 bg-surface border border-border rounded-[8px] text-[13px] font-mono focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -1316,7 +1355,7 @@ function POSContent() {
                       disabled={loading || isInitialLoadingInvoice}
                       checked={gstApplied} 
                       onChange={e => setGstApplied(e.target.checked)}
-                      className="w-4 h-4 rounded border-border text-[#A83D24] focus:ring-[#A83D24] disabled:opacity-50"
+                      className="w-4 h-4 rounded border-border text-accent focus:ring-accent disabled:opacity-50"
                     />
                     Apply 5% GST (2.5% CGST + 2.5% SGST)
                   </label>
@@ -1349,7 +1388,7 @@ function POSContent() {
                           paymentMethod === m 
                             ? m === 'STORE_CREDIT' 
                               ? 'border-emerald-600 bg-emerald-50 text-emerald-900 shadow-sm'
-                              : 'border-[#A83D24] bg-red-50 text-[#A83D24] shadow-sm'
+                              : 'border-accent bg-red-50 text-accent shadow-sm'
                             : 'border-border bg-surface text-ink-muted hover:border-gray-300'
                         }`}
                       >
@@ -1379,7 +1418,7 @@ function POSContent() {
                   ) : (
                     <p className="text-red-600 font-medium mb-3">Split must cover the full bill. Partial dues are not allowed with Split.</p>
                   )}
-                  <button onClick={() => setIsSplitModalOpen(true)} className="w-full py-2 border border-[#A83D24] text-[#A83D24] rounded-[8px] font-bold">Edit split amounts</button>
+                  <button onClick={() => setIsSplitModalOpen(true)} className="w-full py-2 border border-accent text-accent rounded-[8px] font-bold">Edit split amounts</button>
                 </div>
               )}
 
@@ -1410,7 +1449,7 @@ function POSContent() {
                       className={`w-full p-2.5 bg-surface border rounded-[8px] text-[14px] font-mono focus:outline-none ${
                         isOverpaid 
                           ? 'border-red-500 bg-red-50/40 text-red-700 focus:ring-1 focus:ring-red-500' 
-                          : 'border-border focus:ring-1 focus:ring-[#A83D24]'
+                          : 'border-border focus:ring-1 focus:ring-accent'
                       }`}
                     />
                     {isOverpaid && (
@@ -1430,7 +1469,7 @@ function POSContent() {
                 <span className="font-mono">₹{subtotal.toFixed(2)}</span>
               </div>
               {discountAmount > 0 && (
-                <div className="flex justify-between text-[14px] font-medium text-[#A83D24]">
+                <div className="flex justify-between text-[14px] font-medium text-accent">
                   <span>Discount</span>
                   <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
                 </div>
@@ -1469,7 +1508,7 @@ function POSContent() {
                 className={`w-full py-3.5 rounded-[10px] font-bold text-[15px] transition-colors disabled:opacity-50 shadow-sm flex items-center justify-center gap-2 ${
                   editInvoiceId 
                     ? 'bg-amber-600 hover:bg-amber-700 text-white' 
-                    : 'bg-[#A83D24] hover:bg-[#91321C] text-white'
+                    : 'bg-accent hover:bg-[#1D4ED8] text-white'
                 }`}
               >
                 {loading ? (
@@ -1544,7 +1583,7 @@ function POSContent() {
                   onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                   onChange={e => { setSplitCash(e.target.value); setSplitSaved(false); setSplitError(null); }}
                   placeholder="0.00" 
-                  className="w-full p-3 bg-surface border border-border rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                  className="w-full p-3 bg-surface border border-border rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
               <div>
@@ -1558,7 +1597,7 @@ function POSContent() {
                   onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                   onChange={e => { setSplitUpi(e.target.value); setSplitSaved(false); setSplitError(null); }}
                   placeholder="0.00" 
-                  className="w-full p-3 bg-surface border border-border rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                  className="w-full p-3 bg-surface border border-border rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-accent"
                 />
               </div>
             </div>
@@ -1570,7 +1609,7 @@ function POSContent() {
             </div>
             <button 
               onClick={handleSaveSplit}
-              className="w-full py-3 bg-[#A83D24] hover:bg-[#91321C] text-white rounded-[8px] font-bold text-[14px] transition-colors"
+              className="w-full py-3 bg-accent hover:bg-[#1D4ED8] text-white rounded-[8px] font-bold text-[14px] transition-colors"
             >
               Save Split
             </button>
@@ -1636,7 +1675,7 @@ export default function POSPage() {
   return (
     <Suspense fallback={
       <div className="flex h-screen items-center justify-center bg-canvas">
-        <Loader2 className="w-8 h-8 animate-spin text-[#A83D24]" />
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
       </div>
     }>
       <POSContent />

@@ -3,12 +3,13 @@ import LedgerClient from './LedgerClient';
 import { getStockLedgerAction } from '@/lib/actions/inventory';
 import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 export default async function LedgerPage() {
   const res = await getStockLedgerAction();
   if (!res.success) {
-    return <div className="p-8 text-red-500">Error loading ledger: {res.error}</div>;
+    return <div className="p-4 md:p-8 text-red-500">Error loading ledger: {res.error}</div>;
   }
 
   return (

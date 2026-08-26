@@ -137,12 +137,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-5xl w-full mx-auto space-y-8">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Settings className="w-8 h-8 text-[#8B0000]" />
+            <Settings className="w-8 h-8 text-accent" />
             System & Store Settings
           </h1>
           <p className="text-gray-500 mt-1">
@@ -176,7 +176,7 @@ export default function SettingsPage() {
           {/* Section 1: Business Day & Timezone Engine */}
           <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-6">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-              <div className="p-2 bg-red-50 rounded-lg text-[#8B0000]">
+              <div className="p-2 bg-red-50 rounded-lg text-accent">
                 <Clock className="w-6 h-6" />
               </div>
               <div>
@@ -193,7 +193,7 @@ export default function SettingsPage() {
                 <select
                   value={startHour}
                   onChange={(e) => { setStartHour(Number(e.target.value)); setIsDirty(true); }}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] outline-none transition"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition"
                 >
                   {HOURS.map((h) => (
                     <option key={h.value} value={h.value}>
@@ -228,7 +228,7 @@ export default function SettingsPage() {
           {/* Section 2: Store Identity & Receipt Branding */}
           <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-6">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-              <div className="p-2 bg-red-50 rounded-lg text-[#8B0000]">
+              <div className="p-2 bg-red-50 rounded-lg text-accent">
                 <Store className="w-6 h-6" />
               </div>
               <div>
@@ -248,7 +248,7 @@ export default function SettingsPage() {
                   value={storeName}
                   onChange={(e) => { setStoreName(e.target.value); setIsDirty(true); }}
                   placeholder="e.g. Melbun Wholesale"
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] outline-none"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
                 />
               </div>
 
@@ -261,7 +261,7 @@ export default function SettingsPage() {
                   value={tagline}
                   onChange={(e) => { setTagline(e.target.value); setIsDirty(true); }}
                   placeholder="e.g. Premium Wholesale & Retail POS"
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] outline-none"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
                 />
               </div>
 
@@ -274,7 +274,7 @@ export default function SettingsPage() {
                   value={phone}
                   onChange={(e) => { setPhone(e.target.value); setIsDirty(true); }}
                   placeholder="e.g. +91 98765 43210"
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] outline-none"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
                 />
               </div>
 
@@ -287,7 +287,7 @@ export default function SettingsPage() {
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); setIsDirty(true); }}
                   placeholder="e.g. billing@melbunwholesale.com"
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] outline-none"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
                 />
               </div>
 
@@ -300,7 +300,7 @@ export default function SettingsPage() {
                   value={gstin}
                   onChange={(e) => { setGstin(e.target.value); setIsDirty(true); }}
                   placeholder="e.g. 29ABCDE1234F1Z5"
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] outline-none"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
                 />
               </div>
 
@@ -313,7 +313,7 @@ export default function SettingsPage() {
                   value={address}
                   onChange={(e) => { setAddress(e.target.value); setIsDirty(true); }}
                   placeholder="Store street address, city, state and pincode"
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] outline-none resize-none"
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 font-medium focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none resize-none"
                 />
               </div>
             </div>
@@ -322,7 +322,7 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="flex items-center gap-2 px-6 py-3 bg-[#8B0000] hover:bg-[#6e0000] text-white font-bold rounded-xl shadow-sm transition disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-3 bg-accent hover:bg-[#6e0000] text-white font-bold rounded-xl shadow-sm transition disabled:opacity-50"
               >
                 <Save className="w-5 h-5" />
                 {saving ? 'Saving Changes...' : 'Save Store Settings'}
@@ -333,7 +333,7 @@ export default function SettingsPage() {
           {/* Section 3: Authentication & Shift Security */}
           <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-4">
             <div className="flex items-center gap-3 text-gray-900 mb-2">
-              <ShieldCheck className="w-6 h-6 text-[#8B0000]" />
+              <ShieldCheck className="w-6 h-6 text-accent" />
               <h2 className="text-lg font-bold">Session & Authentication</h2>
             </div>
             <p className="text-gray-600 text-sm">

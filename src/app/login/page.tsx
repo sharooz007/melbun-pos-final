@@ -41,7 +41,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[#8B0000]">MelbunPOS</h1>
+          <h1 className="text-3xl font-bold text-accent">MelbunPOS</h1>
           <p className="text-gray-500 mt-2">Sign in to access your dashboard</p>
         </div>
 
@@ -60,7 +60,7 @@ export default function LoginPage() {
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#8B0000] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 placeholder="admin@melbun.com"
               />
             </div>
@@ -74,7 +74,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#8B0000] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                 placeholder="••••••••"
               />
             </div>
@@ -84,7 +84,7 @@ export default function LoginPage() {
             <button
               onClick={handleLogin}
               disabled={loading}
-              className="w-full bg-[#8B0000] text-white py-2.5 rounded-lg font-medium hover:bg-[#A52A2A] transition-colors disabled:opacity-50"
+              className="w-full bg-accent text-white py-2.5 rounded-lg font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
