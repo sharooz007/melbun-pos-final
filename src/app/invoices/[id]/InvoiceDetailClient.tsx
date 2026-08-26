@@ -81,6 +81,14 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
     loadInvoice();
   }, [loadInvoice]);
 
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/invoices');
+    }
+  };
+
   // Profit & Due Calculation
   const profitMetrics = useMemo(() => {
     if (!invoice) return { rawProfit: 0, netProfit: 0, marginPercent: 0, totalRefunds: 0, effectiveTotal: 0, totalPaid: 0, dueAmount: 0 };
@@ -208,9 +216,13 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
   if (error || !invoice) {
     return (
       <div className="p-4 pb-28 md:p-8 max-w-4xl mx-auto space-y-4">
-        <Link href="/invoices" className="inline-flex items-center gap-2 text-sm font-bold text-ink-primary hover:text-accent">
-          <ArrowLeft className="w-4 h-4" /> Back to Invoices
-        </Link>
+        <button 
+          onClick={handleBack} 
+          type="button"
+          className="inline-flex items-center gap-2 text-sm font-bold text-ink-primary hover:text-accent cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" /> Go Back
+        </button>
         <div className="p-6 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-800">
           <ShieldAlert className="w-6 h-6 shrink-0 text-red-600" />
           <div>
@@ -244,12 +256,14 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
       {/* Top Header & Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link
-            href="/invoices"
-            className="p-2.5 bg-surface border border-border rounded-xl hover:bg-row-alt transition text-ink-primary shadow-xs"
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label="Go Back"
+            className="p-2.5 bg-surface border border-border rounded-xl hover:bg-row-alt transition text-ink-primary shadow-xs min-h-[42px] min-w-[42px] flex items-center justify-center cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
-          </Link>
+          </button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold font-mono text-ink-primary">
