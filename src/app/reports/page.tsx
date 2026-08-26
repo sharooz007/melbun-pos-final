@@ -456,7 +456,7 @@ export default function ReportsPage() {
   }, [reportData, trendView]);
 
   return (
-    <div className="p-4 pb-28 md:p-8 space-y-6 max-w-[1400px] w-full mx-auto bg-[#F4F1EA] min-h-screen text-gray-900 font-sans">
+    <div className="p-3.5 pb-36 sm:p-6 md:p-8 md:pb-8 space-y-6 max-w-[1400px] w-full mx-auto bg-[#F4F1EA] min-h-screen text-gray-900 font-sans">
       {/* Title */}
       <header>
         <h1 className="text-3xl font-bold text-gray-900">Reports</h1>

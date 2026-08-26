@@ -42,7 +42,7 @@ export default async function InventoryPage() {
   }
 
   return (
-    <div className="p-4 pb-28 md:p-8 max-w-7xl w-full mx-auto">
+    <div className="p-3.5 pb-36 sm:p-6 md:p-8 md:pb-8 max-w-7xl w-full mx-auto">
       <InventoryClient variants={variants || []} categories={categories || []} />
     </div>
   );

@@ -275,7 +275,7 @@ export default function ExpenseDetailClient({ id }: { id: string }) {
   }
 
   return (
-    <div className="p-3.5 sm:p-6 md:p-8 max-w-4xl w-full mx-auto space-y-6 bg-canvas min-h-screen text-ink-primary font-sans">
+    <div className="p-3.5 pb-36 sm:p-6 sm:pb-36 md:p-8 md:pb-8 max-w-4xl w-full mx-auto space-y-6 bg-canvas min-h-screen text-ink-primary font-sans">
       {/* Top Header & Back Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">

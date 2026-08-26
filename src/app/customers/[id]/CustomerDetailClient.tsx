@@ -219,7 +219,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
   const creditBalance = Number(customer.credit_balance || 0);
 
   return (
-    <div className="p-3.5 sm:p-6 md:p-8 max-w-6xl w-full mx-auto space-y-6">
+    <div className="p-3.5 pb-36 sm:p-6 sm:pb-36 md:p-8 md:pb-8 max-w-6xl w-full mx-auto space-y-6">
       <Link 
         href="/customers" 
         className="inline-flex items-center gap-1.5 text-ink-muted hover:text-ink-primary font-bold text-xs transition-colors"

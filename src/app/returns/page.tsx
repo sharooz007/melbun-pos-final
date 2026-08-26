@@ -11,7 +11,7 @@ export const metadata = {
 
 export default function ReturnsPage() {
   return (
-    <div className="flex-1 overflow-y-auto bg-canvas p-3.5 sm:p-6 md:p-8 pb-28">
+    <div className="flex-1 overflow-y-auto bg-canvas p-3.5 pb-36 sm:p-6 md:p-8 md:pb-8">
       <div className="max-w-6xl w-full mx-auto space-y-6">
         <Suspense fallback={
           <div className="p-12 flex flex-col justify-center items-center gap-2">

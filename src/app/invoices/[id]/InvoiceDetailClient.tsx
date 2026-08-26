@@ -252,7 +252,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
   }
 
   return (
-    <div className="p-3 pb-28 sm:p-6 md:p-8 max-w-5xl w-full mx-auto space-y-5 bg-canvas min-h-screen font-sans text-ink-primary">
+    <div className="p-3.5 pb-36 sm:p-6 sm:pb-36 md:p-8 md:pb-8 max-w-5xl w-full mx-auto space-y-5 bg-canvas min-h-screen font-sans text-ink-primary">
       {/* Top Header & Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">

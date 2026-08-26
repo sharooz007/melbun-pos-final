@@ -13,7 +13,7 @@ export default async function LedgerPage() {
   }
 
   return (
-    <div className="h-full overflow-hidden flex flex-col bg-[#EFECE6] p-4 pb-28 lg:p-8">
+    <div className="h-full overflow-hidden flex flex-col bg-[#EFECE6] p-3.5 pb-36 sm:p-6 md:p-6 md:pb-8 lg:p-8">
       <div className="max-w-[1200px] w-full mx-auto flex-1 flex flex-col min-h-0">
         <LedgerClient initialData={res.data || []} initialPagination={res.pagination} />
       </div>

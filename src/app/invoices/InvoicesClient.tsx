@@ -395,7 +395,7 @@ export default function InvoicesClient({
   };
 
   return (
-    <div className="p-4 pb-28 sm:p-8 space-y-6">
+    <div className="p-3.5 pb-36 sm:p-6 md:p-8 md:pb-8 space-y-6">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Invoices</h1>
