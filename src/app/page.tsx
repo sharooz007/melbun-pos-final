@@ -175,7 +175,7 @@ export default function DashboardPage() {
                 <ul className="divide-y divide-border">
                   {recentInvoices.map((inv) => (
                     <li key={inv.id}>
-                      <Link href={`/invoices?invoice_id=${inv.id}`} className="p-4 flex justify-between items-center hover:bg-row-alt transition-colors block">
+                      <Link href={`/invoices/${inv.id}`} className="p-4 flex justify-between items-center hover:bg-row-alt transition-colors block">
                         <div>
                           <div className={`font-mono text-sm font-bold ${inv.is_voided ? 'line-through text-red-500' : 'text-ink-primary'}`}>{inv.invoice_number}</div>
                           <div className="text-xs text-ink-muted">{inv.customer_name || 'Walk-in'}</div>

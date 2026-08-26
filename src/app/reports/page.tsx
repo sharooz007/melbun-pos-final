@@ -960,7 +960,7 @@ export default function ReportsPage() {
                         {paginatedTabRows.map((inv: any) => (
                           <tr 
                             key={inv.id} 
-                            onClick={() => router.push(`/invoices?invoice_id=${inv.id}`)}
+                            onClick={() => router.push(`/invoices/${inv.id}`)}
                             className="hover:bg-gray-50/70 transition cursor-pointer"
                           >
                             <td className={`py-3 px-4 font-mono font-bold ${inv.is_voided ? 'line-through text-red-500' : 'text-gray-900'}`}>

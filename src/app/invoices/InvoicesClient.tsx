@@ -125,21 +125,11 @@ export default function InvoicesClient({
     const invId = searchParams.get('invoice_id');
     const invNumber = searchParams.get('invoice_number');
     if (invId) {
-      (async () => {
-        setInspectLoading(true);
-        try {
-          const res = await getFullInvoiceAction(invId);
-          if (res.success && res.data) {
-            setInspectInvoice(res.data);
-          }
-        } finally {
-          setInspectLoading(false);
-        }
-      })();
+      router.replace(`/invoices/${invId}`);
     } else if (invNumber) {
       setSearchQuery(invNumber);
     }
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   // Global Escape keydown listener to close open modals
   useEffect(() => {
@@ -364,20 +354,8 @@ export default function InvoicesClient({
     router.push(`/pos?editInvoiceId=${inv.id}`);
   };
 
-  const handleInspectInvoice = async (inv: InvoiceItem) => {
-    setInspectLoading(true);
-    try {
-      const res = await getFullInvoiceAction(inv.id);
-      if (res.success && res.data) {
-        setInspectInvoice(res.data);
-      } else {
-        setStatus({ type: 'error', msg: res?.error || 'Failed to load invoice details.' });
-      }
-    } catch (err: any) {
-      setStatus({ type: 'error', msg: err.message || 'Failed to load invoice details.' });
-    } finally {
-      setInspectLoading(false);
-    }
+  const handleInspectInvoice = (inv: InvoiceItem) => {
+    router.push(`/invoices/${inv.id}`);
   };
 
   const renderStatusBadge = (inv: InvoiceItem) => {
