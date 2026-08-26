@@ -86,6 +86,18 @@ function POSContent() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string, invoiceId?: string, invoiceNumber?: string } | null>(null);
 
+  // Success Modal Escape Key Dismissal
+  useEffect(() => {
+    if (status?.type !== 'success') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setStatus(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [status]);
+
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraStatusMessage, setCameraStatusMessage] = useState<string | null>(null);
   const [isClearCartModalOpen, setIsClearCartModalOpen] = useState(false);
@@ -733,6 +745,7 @@ function POSContent() {
         if (!res?.success) {
           setStatus({ type: 'error', msg: res?.error || 'Failed to update invoice' });
         } else {
+          setIsMobileCheckoutOpen(false);
           setStatus({ 
             type: 'success', 
             msg: `Invoice #${editInvoiceNumber} successfully updated and stock synchronized!`,
@@ -740,10 +753,6 @@ function POSContent() {
             invoiceNumber: editInvoiceNumber || undefined
           });
           resetFormState();
-          // Seamlessly redirect back to invoices
-          setTimeout(() => {
-            router.push('/invoices');
-          }, 1200);
         }
       } else {
         // EXECUTE NEW CHECKOUT
@@ -769,6 +778,7 @@ function POSContent() {
         if (!res?.success) {
           setStatus({ type: 'error', msg: res?.error || 'Checkout failed' });
         } else {
+          setIsMobileCheckoutOpen(false);
           setStatus({ 
             type: 'success', 
             msg: `Invoice ${res.data.invoice_number} generated successfully!`,
@@ -1079,30 +1089,18 @@ function POSContent() {
 
           <div className="flex-1 overflow-y-auto flex flex-col justify-between">
             <div className="p-6 space-y-6">
-              {/* Checkout Status Toast / Banner */}
-              {status && (
-                <div className={`p-4 rounded-xl flex flex-col gap-2 border ${
-                  status.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                }`}>
+              {/* Checkout Error Toast / Banner */}
+              {status && status.type === 'error' && (
+                <div className="p-4 rounded-xl flex flex-col gap-2 border bg-red-50 text-red-700 border-red-200 animate-in fade-in">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      {status.type === 'error' ? <AlertCircle className="w-5 h-5 flex-shrink-0" /> : <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />}
+                      <AlertCircle className="w-5 h-5 flex-shrink-0" />
                       <span className="text-xs font-bold">{status.msg}</span>
                     </div>
                     <button onClick={() => setStatus(null)} className="text-gray-400 hover:text-gray-600">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
-                  {status.invoiceId && (
-                    <button
-                      onClick={() => handleDownloadPdf(status.invoiceId!)}
-                      disabled={downloadingPdf}
-                      className="mt-1 flex items-center justify-center gap-2 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
-                    >
-                      {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                      Download Invoice PDF ({status.invoiceNumber})
-                    </button>
-                  )}
                 </div>
               )}
 
@@ -1669,6 +1667,76 @@ function POSContent() {
             setCameraStatusMessage(null);
           }}
         />
+      )}
+
+      {/* Centered Success Toast / Celebration Modal */}
+      {status && status.type === 'success' && (
+        <div 
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150 cursor-pointer"
+          onClick={() => setStatus(null)}
+        >
+          <div 
+            className="bg-surface rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-border text-center space-y-4 animate-in zoom-in-95 duration-150 cursor-default relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setStatus(null)}
+              className="absolute right-2 top-2 text-ink-muted hover:text-ink-primary min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-row-alt transition"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-xs border border-emerald-200">
+              <CheckCircle className="w-8 h-8" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-ink-primary">Sale Completed!</h3>
+              {status.invoiceNumber && (
+                <p className="text-xs font-mono font-bold text-accent mt-0.5">
+                  {status.invoiceNumber}
+                </p>
+              )}
+              <p className="text-xs text-ink-muted mt-1">
+                {status.msg}
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              {status.invoiceId && (
+                <button
+                  onClick={() => handleDownloadPdf(status.invoiceId!)}
+                  disabled={downloadingPdf}
+                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs min-h-[42px]"
+                >
+                  {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  <span>Download / Print Receipt</span>
+                </button>
+              )}
+
+              {status.invoiceId && (
+                <button
+                  onClick={() => {
+                    const invId = status.invoiceId;
+                    setStatus(null);
+                    router.push(`/invoices/${invId}`);
+                  }}
+                  className="w-full py-2.5 px-4 bg-surface border border-border hover:bg-row-alt text-ink-primary rounded-xl text-xs font-bold transition shadow-2xs min-h-[42px]"
+                >
+                  View Invoice Details
+                </button>
+              )}
+
+              <button
+                onClick={() => setStatus(null)}
+                className="w-full py-2.5 px-4 bg-row-alt hover:bg-border text-ink-muted hover:text-ink-primary rounded-xl text-xs font-bold transition min-h-[42px]"
+              >
+                New Sale (Done)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
