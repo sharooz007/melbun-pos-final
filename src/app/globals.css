@@ -14,11 +14,19 @@
     --row-alt: #F1F5F9;         /* slate-100 */
   }
 
+  /* Prevent iOS Safari from auto-zooming on focus when font size < 16px */
+  @media screen and (max-width: 768px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
+
   body {
     background-color: var(--canvas-base);
     color: var(--ink-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    touch-action: pan-x pan-y;
   }
 }
 
