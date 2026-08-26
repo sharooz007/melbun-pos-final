@@ -128,6 +128,34 @@ export async function voidExpenseAction(
 /**
  * Retrieves the most recent expenses for list and ledger views
  */
+export async function getExpenseDetailsAction(
+  id: string
+): Promise<ExpenseActionResult<ExpenseItem>> {
+  try {
+    const parsed = deleteExpenseSchema.safeParse({ id });
+    if (!parsed.success) {
+      return { success: false, error: 'Invalid expense ID format' };
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('id, category, amount, payment_method, notes, is_voided, is_hidden, created_at, updated_at')
+      .eq('id', parsed.data.id)
+      .eq('is_hidden', false)
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: (data as unknown as ExpenseItem) };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unexpected error while fetching expense details';
+    return { success: false, error: message };
+  }
+}
+
 export async function getExpensesAction(
   limit: number = 100
 ): Promise<ExpenseActionResult<ExpenseItem[]>> {
@@ -231,7 +259,15 @@ export async function deleteExpenseAction(
   }
 }
 
-export async function getExpensesSummaryMetricsAction() {
+export async function getExpensesSummaryMetricsAction(): Promise<
+  ExpenseActionResult<{
+    totalActiveSum: number;
+    cashSum: number;
+    upiSum: number;
+    voidedCount: number;
+    totalCount: number;
+  }>
+> {
   try {
     const supabase = createClient();
     const { data, error } = await supabase

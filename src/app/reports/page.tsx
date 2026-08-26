@@ -1008,9 +1008,15 @@ export default function ReportsPage() {
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {paginatedTabRows.map((e: any) => (
-                          <tr key={e.id} className="hover:bg-gray-50/70 transition">
+                          <tr 
+                            key={e.id} 
+                            onClick={() => router.push(`/expenses/${e.id}`)}
+                            className="hover:bg-row-alt/60 transition cursor-pointer"
+                          >
                             <td className="py-3 px-4 font-mono text-gray-500">{new Date(e.created_at).toLocaleDateString('en-IN')}</td>
-                            <td className="py-3 px-4 font-bold text-gray-900">{e.category}</td>
+                            <td className="py-3 px-4 font-bold text-gray-900 flex items-center gap-1.5">
+                              <span>{e.category}</span>
+                            </td>
                             <td className="py-3 px-4 text-right font-mono font-bold text-red-600">{formatINR(e.amount)}</td>
                             <td className="py-3 px-4 text-center font-mono text-gray-600">{e.payment_method}</td>
                             <td className="py-3 px-4 text-gray-500 truncate max-w-xs">{e.notes || '-'}</td>

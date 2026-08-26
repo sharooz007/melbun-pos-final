@@ -210,12 +210,12 @@ export default function DashboardPage() {
                 <ul className="divide-y divide-border">
                   {recentExpenses.map((exp) => (
                     <li key={exp.id}>
-                      <Link href="/expenses" className="p-4 flex justify-between items-center hover:bg-row-alt transition-colors block">
+                      <Link href={`/expenses/${exp.id}`} className="p-3.5 sm:p-4 flex justify-between items-center hover:bg-row-alt/60 transition-colors block">
                         <div>
-                          <div className={`text-sm font-bold ${exp.is_voided ? 'line-through text-red-500' : 'text-ink-primary'}`}>{exp.category}</div>
-                          <div className="text-xs text-ink-muted">{exp.payment_method}</div>
+                          <div className={`text-xs sm:text-sm font-bold ${exp.is_voided ? 'line-through text-ink-muted' : 'text-ink-primary'}`}>{exp.category}</div>
+                          <div className="text-[11px] text-ink-muted mt-0.5">{exp.payment_method} • {new Date(exp.created_at).toLocaleDateString('en-IN')}</div>
                         </div>
-                        <span className={`font-bold text-sm ${exp.is_voided ? 'text-red-500' : 'text-red-600'}`}>
+                        <span className={`font-bold font-mono text-xs sm:text-sm ${exp.is_voided ? 'text-ink-muted line-through' : 'text-red-600'}`}>
                           {formatINR(exp.amount)}
                         </span>
                       </Link>
