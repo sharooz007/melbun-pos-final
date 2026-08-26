@@ -1535,25 +1535,29 @@ function POSContent() {
       {isSplitModalOpen && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget) { setIsSplitModalOpen(false); setSplitError(null); } }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 cursor-pointer"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto cursor-pointer animate-in fade-in duration-150"
         >
-          <div className="bg-surface border border-border rounded-[16px] max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-150 cursor-default">
-            <div className="flex justify-between items-center">
-              <h2 className="text-[17px] font-bold text-ink-primary">Split Payment</h2>
-              <button onClick={() => { setIsSplitModalOpen(false); setSplitError(null); }} className="text-gray-400 hover:text-gray-600">
+          <div className="bg-surface border border-border rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 cursor-default">
+            <div className="flex justify-between items-center pb-2 border-b border-border">
+              <h2 className="text-base font-bold text-ink-primary">Split Payment</h2>
+              <button 
+                onClick={() => { setIsSplitModalOpen(false); setSplitError(null); }} 
+                className="p-1.5 text-ink-muted hover:text-ink-primary hover:bg-row-alt rounded-full transition"
+                aria-label="Close"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             {splitError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-semibold text-red-700">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700">
                 {splitError}
               </div>
             )}
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {customerCredit > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="text-[12px] font-bold uppercase text-emerald-800 flex items-center gap-1">
+                    <label className="text-xs font-bold text-emerald-800 flex items-center gap-1">
                       <Wallet className="w-3.5 h-3.5 text-emerald-700" />
                       Store Credit (₹)
                     </label>
@@ -1569,12 +1573,12 @@ function POSContent() {
                     onChange={e => { setSplitCredit(e.target.value); setSplitSaved(false); setSplitError(null); }}
                     placeholder={`0.00 (Max ${customerCredit.toFixed(2)})`} 
                     max={customerCredit}
-                    className="w-full p-3 bg-emerald-50/50 border border-emerald-200 rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-emerald-600 text-emerald-900"
+                    className="w-full p-2.5 bg-emerald-50/50 border border-emerald-200 rounded-xl font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 text-emerald-900"
                   />
                 </div>
               )}
               <div>
-                <label className="block text-[12px] font-bold uppercase text-ink-muted mb-1">Cash Amount (₹)</label>
+                <label className="block text-xs font-bold text-ink-primary mb-1">Cash Amount (₹)</label>
                 <input 
                   type="number" 
                   min="0"
@@ -1584,11 +1588,11 @@ function POSContent() {
                   onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                   onChange={e => { setSplitCash(e.target.value); setSplitSaved(false); setSplitError(null); }}
                   placeholder="0.00" 
-                  className="w-full p-3 bg-surface border border-border rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="w-full p-2.5 bg-surface border border-border rounded-xl font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent text-ink-primary"
                 />
               </div>
               <div>
-                <label className="block text-[12px] font-bold uppercase text-ink-muted mb-1">UPI Amount (₹)</label>
+                <label className="block text-xs font-bold text-ink-primary mb-1">UPI Amount (₹)</label>
                 <input 
                   type="number" 
                   min="0"
@@ -1598,19 +1602,19 @@ function POSContent() {
                   onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                   onChange={e => { setSplitUpi(e.target.value); setSplitSaved(false); setSplitError(null); }}
                   placeholder="0.00" 
-                  className="w-full p-3 bg-surface border border-border rounded-[8px] font-mono text-[15px] focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="w-full p-2.5 bg-surface border border-border rounded-xl font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent text-ink-primary"
                 />
               </div>
             </div>
-            <div className="pt-2 border-t border-border flex justify-between items-center text-[14px]">
-              <span className="font-medium text-ink-muted">Total Entered / Required</span>
-              <span className="font-mono font-bold">
+            <div className="pt-2 border-t border-border flex justify-between items-center text-xs">
+              <span className="font-semibold text-ink-muted">Total Entered / Required</span>
+              <span className="font-mono font-bold text-sm">
                 ₹{((parseFloat(splitCash||'0')) + (parseFloat(splitUpi||'0')) + (parseFloat(splitCredit||'0'))).toFixed(2)} / ₹{finalTotal.toFixed(2)}
               </span>
             </div>
             <button 
               onClick={handleSaveSplit}
-              className="w-full py-3 bg-accent hover:bg-[#1D4ED8] text-white rounded-[8px] font-bold text-[14px] transition-colors"
+              className="w-full py-2.5 bg-accent hover:bg-accent-hover text-white rounded-xl font-bold text-xs transition shadow-xs"
             >
               Save Split
             </button>
@@ -1622,9 +1626,9 @@ function POSContent() {
       {isClearCartModalOpen && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget) setIsClearCartModalOpen(false); }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 cursor-pointer"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto cursor-pointer animate-in fade-in duration-150"
         >
-          <div className="bg-surface border border-border rounded-[16px] max-w-sm w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150 cursor-default">
+          <div className="bg-surface border border-border rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 cursor-default">
             <div className="flex items-center gap-3 text-red-600">
               <Trash2 className="w-6 h-6 shrink-0" />
               <h3 className="text-base font-bold text-ink-primary">Clear Entire Cart?</h3>
@@ -1632,11 +1636,11 @@ function POSContent() {
             <p className="text-xs text-ink-muted leading-relaxed">
               This will remove all <strong className="text-ink-primary">{cart.length} item(s)</strong> (Value: <strong className="text-ink-primary">₹{finalTotal.toFixed(2)}</strong>) from the active checkout screen.
             </p>
-            <div className="flex gap-3 justify-end pt-2">
+            <div className="flex gap-2.5 justify-end pt-2 border-t border-border">
               <button
                 type="button"
                 onClick={() => setIsClearCartModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-ink-muted hover:text-ink-primary rounded-lg"
+                className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition"
               >
                 Keep Cart
               </button>
@@ -1647,7 +1651,7 @@ function POSContent() {
                   setSplitSaved(false);
                   setIsClearCartModalOpen(false);
                 }}
-                className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+                className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition"
               >
                 Yes, Clear All
               </button>

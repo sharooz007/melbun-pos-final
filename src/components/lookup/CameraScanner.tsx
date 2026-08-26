@@ -125,7 +125,7 @@ export default function CameraScanner({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between animate-in fade-in duration-200 overflow-y-auto">
+    <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col justify-between animate-in fade-in duration-200 overflow-y-auto">
       {/* Top Controls Bar */}
       <div className="p-4 flex items-center justify-between text-white border-b border-white/10 shrink-0">
         <div className="flex items-center gap-2">
