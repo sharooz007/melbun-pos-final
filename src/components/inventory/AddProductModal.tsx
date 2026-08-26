@@ -1,6 +1,6 @@
 'use client'
-import React, { useState } from 'react';
-import { PackagePlus, X, Plus, Trash2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { PackagePlus, X, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 
 interface AddProductModalProps {
   isOpen: boolean;
@@ -18,7 +18,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       if (initialData) {
         setName(initialData.name || '');
@@ -39,7 +39,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
 
   const updateVariant = (index: number, field: string, value: any) => {
     const newVars = [...variants];
-    newVars[index][field] = value;
+    newVars[index] = { ...newVars[index], [field]: value };
     setVariants(newVars);
   };
 
@@ -50,11 +50,10 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
   const removeVariant = (index: number) => {
     if (variants.length <= 1) return;
     const target = variants[index];
-    // Check if variant has existing physical stock in edit mode
     const hasExistingStock = target.id && (Number(target.stock_quantity || 0) > 0 || Number(target.stock_sets || 0) > 0);
     if (hasExistingStock) {
       const confirmed = window.confirm(
-        `Warning: Variant "${target.name || 'Unnamed'}" currently has ${target.stock_quantity || 0} pieces in inventory. Removing it will delete the variant and permanently write off all remaining stock to zero upon saving. Are you sure you want to proceed?`
+        `Warning: Variant "${target.name || 'Unnamed'}" currently has ${target.stock_quantity || 0} pieces in inventory. Removing it will write off remaining stock to zero upon saving. Proceed?`
       );
       if (!confirmed) return;
     }
@@ -66,7 +65,6 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
     if (loading) return;
     setError('');
 
-    // Check for loss sales (Selling Price < Cost Price)
     const lossVariants = variants.filter(v => {
       const cost = Number(v.cost_price) || 0;
       const sell = Number(v.selling_price) || 0;
@@ -76,7 +74,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
     if (lossVariants.length > 0) {
       const names = lossVariants.map(v => `"${v.name || 'Unnamed'}" (Cost: ₹${v.cost_price}, Sell: ₹${v.selling_price})`).join(', ');
       const confirmed = window.confirm(
-        `Warning: The following variant(s) have Selling Price lower than Cost Price (Selling at a loss):\n${names}\n\nDo you wish to proceed and save anyway?`
+        `Warning: The following variant(s) have Selling Price lower than Cost Price:\n${names}\n\nDo you wish to proceed?`
       );
       if (!confirmed) return;
     }
@@ -84,13 +82,13 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
     setLoading(true);
 
     try {
-      // Ensure empty string fallbacks are converted to 0 or valid numbers for the backend
       const payload = {
-        name,
-        category_id: categoryId,
-        pieces_per_set: piecesPerSet === '' ? 1 : Number(piecesPerSet),
+        name: name.trim(),
+        category_id: categoryId || null,
+        pieces_per_set: piecesPerSet === '' ? 1 : Math.max(1, Number(piecesPerSet)),
         variants: variants.map(v => ({
           ...v,
+          name: v.name.trim(),
           cost_price: v.cost_price === '' ? 0 : Number(v.cost_price),
           selling_price: v.selling_price === '' ? 0 : Number(v.selling_price),
           initial_sets: v.id ? undefined : (v.initial_sets === '' ? 0 : Number(v.initial_sets)),
@@ -107,188 +105,370 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-ink-primary/20 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative bg-[#EFECE6] w-full max-w-[800px] rounded-[16px] shadow-2xl flex flex-col max-h-[90vh]">
-        
-        <div className="flex items-center justify-between p-6 bg-white border-b border-border rounded-t-[16px]">
+    <div 
+      className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto cursor-pointer"
+      onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}
+    >
+      <div 
+        className="relative bg-surface w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[88vh] my-auto border border-border overflow-hidden animate-in zoom-in-95 duration-150 cursor-default"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-5 bg-surface border-b border-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#A83D24]/10 rounded-[10px] flex items-center justify-center text-[#A83D24]">
+            <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center text-accent">
               <PackagePlus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-[18px] font-bold text-ink-primary">{initialData ? 'Edit Product' : 'Add New Product'}</h2>
-              <p className="text-[13px] text-ink-muted mt-0.5">{initialData ? 'Update product and its variants' : 'Create a new master product and its variants'}</p>
+              <h2 className="text-base sm:text-lg font-bold text-ink-primary">
+                {initialData ? `Edit "${initialData.name}"` : 'Add New Product'}
+              </h2>
+              <p className="text-xs text-ink-muted mt-0.5">
+                {initialData ? 'Update pack size, prices, and variant options' : 'Create master product with multi-variant options'}
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-ink-muted hover:bg-row-alt rounded-full transition-colors">
+          <button 
+            onClick={onClose} 
+            disabled={loading}
+            className="p-2 text-ink-muted hover:text-ink-primary hover:bg-row-alt rounded-full transition"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
-          <form id="productForm" onSubmit={handleSubmit} className="space-y-6">
-            
+        {/* Scrollable Form Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+          <form id="productForm" onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="p-3 bg-red-50 text-red-700 text-[13px] font-medium rounded-[8px] border border-red-200">
-                {error}
+              <div className="p-3 bg-red-50 text-red-700 text-xs font-semibold rounded-xl border border-red-200 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{error}</span>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-6 bg-white p-5 rounded-[12px] border border-border">
-              <div>
-                <label className="block text-[13px] font-bold text-ink-primary mb-1.5">Product Name *</label>
-                <input 
-                  type="text" value={name} onChange={e => setName(e.target.value)} required
-                  placeholder="e.g. Oversized T-Shirt"
-                  className="input-control w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-[13px] font-bold text-ink-primary mb-1.5">Category *</label>
-                {categories.length === 0 ? (
-                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-[8px] text-[12px] text-amber-800">
-                    No categories found. Please create a category first via &quot;Manage Categories&quot;.
-                  </div>
-                ) : (
+            {/* Master Details Bento Card */}
+            <div className="p-4 bg-row-alt/60 rounded-xl border border-border space-y-3.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-muted block">
+                Product Details
+              </span>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Product Name */}
+                <div className="sm:col-span-1">
+                  <label className="block text-xs font-bold text-ink-primary mb-1">
+                    Product Name <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    value={name} 
+                    onChange={e => setName(e.target.value)} 
+                    required
+                    placeholder="e.g. Cotton Shirt"
+                    className="w-full bg-surface border border-border p-2.5 text-xs font-medium rounded-xl text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none"
+                  />
+                </div>
+
+                {/* Category */}
+                <div className="sm:col-span-1">
+                  <label className="block text-xs font-bold text-ink-primary mb-1">
+                    Category <span className="text-red-500">*</span>
+                  </label>
                   <select 
-                    value={categoryId} onChange={e => setCategoryId(e.target.value)} required
-                    className="input-control w-full appearance-none bg-white"
+                    value={categoryId} 
+                    onChange={e => setCategoryId(e.target.value)} 
+                    required
+                    className="w-full bg-surface border border-border p-2.5 text-xs font-medium rounded-xl text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none cursor-pointer"
                   >
+                    {categories.length === 0 && <option value="">No Categories</option>}
                     {categories.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
-                )}
-              </div>
-              <div>
-                <label className="block text-[13px] font-bold text-ink-primary mb-1.5">Pieces per Set *</label>
-                <input 
-                  type="number" min="1" 
-                  value={piecesPerSet} 
-                  onFocus={e => e.target.select()}
-                  onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                  onChange={e => setPiecesPerSet(e.target.value === '' ? '' : parseInt(e.target.value))} 
-                  required
-                  className="input-control w-full font-mono"
-                />
+                </div>
+
+                {/* Pieces per Set */}
+                <div className="sm:col-span-1">
+                  <label className="block text-xs font-bold text-ink-primary mb-1">
+                    Pieces per Set <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    value={piecesPerSet} 
+                    onFocus={e => e.target.select()}
+                    onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                    onChange={e => setPiecesPerSet(e.target.value === '' ? '' : parseInt(e.target.value))} 
+                    required
+                    placeholder="e.g. 4"
+                    className="w-full bg-surface border border-border p-2.5 text-xs font-mono font-bold rounded-xl text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[14px] font-bold text-ink-primary">Variants (Colors/Sizes)</h3>
+            {/* Variants Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-muted block">
+                  Product Variants ({variants.length})
+                </span>
+                <button 
+                  type="button" 
+                  onClick={addVariant}
+                  className="px-3 py-1.5 bg-accent/10 hover:bg-accent/20 text-accent text-xs font-bold rounded-lg flex items-center gap-1 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Variant</span>
+                </button>
               </div>
-              
-              <div className="space-y-3">
-                {variants.map((v, idx) => (
-                  <div key={idx} className="p-4 bg-row-alt rounded-[12px] border border-border flex gap-3 items-end">
-                    <div className="flex-1">
-                      <label className="block text-[12px] font-medium text-ink-muted mb-1">Variant Name</label>
-                      <input 
-                        type="text" value={v.name} onChange={e => updateVariant(idx, 'name', e.target.value)} required
-                        placeholder="e.g. Red / M"
-                        className="w-full p-2 bg-surface border border-border rounded-[8px] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
-                      />
-                    </div>
-                    <div className="w-28">
-                      <label className="block text-[12px] font-medium text-ink-muted mb-1">Cost Price</label>
-                      <input 
-                        type="number" min="0" step="0.01" value={v.cost_price} 
-                        onFocus={e => e.target.select()}
-                        onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                        onChange={e => updateVariant(idx, 'cost_price', e.target.value === '' ? '' : parseFloat(e.target.value))} required
-                        className="w-full p-2 bg-surface border border-border rounded-[8px] text-[13px] text-right font-mono focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
-                      />
-                    </div>
-                    <div className="w-28">
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-[12px] font-medium text-ink-muted">Sell Price</label>
-                        {Number(v.cost_price) > 0 && Number(v.selling_price) < Number(v.cost_price) && (
-                          <span className="text-[10px] text-amber-700 font-bold bg-amber-100 px-1 rounded" title="Selling below cost">Loss</span>
+
+              {/* Mobile View: Stacked Cards (0px Horizontal Overflow) */}
+              <div className="block sm:hidden space-y-3">
+                {variants.map((v, idx) => {
+                  const isLoss = Number(v.cost_price) > 0 && Number(v.selling_price) < Number(v.cost_price);
+                  return (
+                    <div key={idx} className="p-3.5 bg-surface border border-border rounded-xl space-y-3 shadow-2xs">
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="text-xs font-bold text-ink-primary">Variant #{idx + 1}</span>
+                        {variants.length > 1 && (
+                          <button 
+                            type="button" 
+                            onClick={() => removeVariant(idx)} 
+                            className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         )}
                       </div>
-                      <input 
-                        type="number" min="0" step="0.01" value={v.selling_price} 
-                        onFocus={e => e.target.select()}
-                        onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                        onChange={e => updateVariant(idx, 'selling_price', e.target.value === '' ? '' : parseFloat(e.target.value))} required
-                        className={`w-full p-2 bg-surface border rounded-[8px] text-[13px] text-right font-mono focus:outline-none focus:ring-1 ${
-                          Number(v.cost_price) > 0 && Number(v.selling_price) < Number(v.cost_price)
-                            ? 'border-amber-500 text-amber-900 focus:ring-amber-500'
-                            : 'border-border focus:ring-[#A83D24]'
-                        }`}
-                      />
-                    </div>
-                    <div className="w-24">
-                      <label className="block text-[12px] font-medium text-ink-muted mb-1">Barcode</label>
-                      <input 
-                        type="text" value={v.barcode} onChange={e => updateVariant(idx, 'barcode', e.target.value)}
-                        placeholder="Auto"
-                        className="w-full p-2 bg-surface border border-border rounded-[8px] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
-                      />
-                    </div>
-                    {/* Only show initial stock fields if this variant is newly being added (no ID) */}
-                    {!v.id && (
-                      <>
-                        <div className="w-20">
-                          <label className="block text-[12px] font-medium text-ink-muted mb-1">Sets (Stock)</label>
+
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-ink-muted mb-0.5">Variant Name</label>
                           <input 
-                            type="number" min="0" value={v.initial_sets} 
-                            onFocus={e => e.target.select()}
-                            onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                            onChange={e => updateVariant(idx, 'initial_sets', e.target.value === '' ? '' : parseInt(e.target.value))}
-                            className="w-full p-2 bg-surface border border-border rounded-[8px] text-[13px] text-right font-mono focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                            type="text" 
+                            value={v.name} 
+                            onChange={e => updateVariant(idx, 'name', e.target.value)} 
+                            required
+                            placeholder="e.g. Red / XL"
+                            className="w-full bg-row-alt border border-border p-2 text-xs font-semibold rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
                           />
                         </div>
-                        <div className="w-20">
-                          <label className="block text-[12px] font-medium text-ink-muted mb-1">Loose (Stock)</label>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-medium text-ink-muted mb-0.5">Cost Price</label>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              step="0.01" 
+                              value={v.cost_price} 
+                              onFocus={e => e.target.select()}
+                              onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                              onChange={e => updateVariant(idx, 'cost_price', e.target.value === '' ? '' : parseFloat(e.target.value))} 
+                              required
+                              className="w-full bg-row-alt border border-border p-2 text-xs font-mono font-bold text-right rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between items-center mb-0.5">
+                              <label className="block text-[11px] font-medium text-ink-muted">Sell Price</label>
+                              {isLoss && <span className="text-[9px] bg-amber-100 text-amber-900 px-1 rounded font-bold">Loss</span>}
+                            </div>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              step="0.01" 
+                              value={v.selling_price} 
+                              onFocus={e => e.target.select()}
+                              onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                              onChange={e => updateVariant(idx, 'selling_price', e.target.value === '' ? '' : parseFloat(e.target.value))} 
+                              required
+                              className={`w-full bg-row-alt border p-2 text-xs font-mono font-bold text-right rounded-lg text-ink-primary focus:ring-1 focus:outline-none ${
+                                isLoss ? 'border-amber-500 text-amber-900' : 'border-border focus:ring-accent'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-medium text-ink-muted mb-0.5">Barcode</label>
                           <input 
-                            type="number" min="0" value={v.initial_loose} 
-                            onFocus={e => e.target.select()}
-                            onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                            onChange={e => updateVariant(idx, 'initial_loose', e.target.value === '' ? '' : parseInt(e.target.value))}
-                            className="w-full p-2 bg-surface border border-border rounded-[8px] text-[13px] text-right font-mono focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                            type="text" 
+                            value={v.barcode} 
+                            onChange={e => updateVariant(idx, 'barcode', e.target.value)}
+                            placeholder="Auto-generated if empty"
+                            className="w-full bg-row-alt border border-border p-2 text-xs font-mono rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
                           />
                         </div>
-                      </>
-                    )}
-                    {variants.length > 1 && (
-                      <button type="button" onClick={() => removeVariant(idx)} className="p-2 text-ink-muted hover:text-[#A83D24] bg-surface border border-border rounded-[8px]">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+
+                        {!v.id && (
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <div>
+                              <label className="block text-[11px] font-medium text-ink-muted mb-0.5">Initial Sets</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                value={v.initial_sets} 
+                                onFocus={e => e.target.select()}
+                                onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                                onChange={e => updateVariant(idx, 'initial_sets', e.target.value === '' ? '' : parseInt(e.target.value))}
+                                placeholder="0"
+                                className="w-full bg-row-alt border border-border p-2 text-xs font-mono text-right rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-medium text-ink-muted mb-0.5">Initial Loose</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                value={v.initial_loose} 
+                                onFocus={e => e.target.select()}
+                                onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                                onChange={e => updateVariant(idx, 'initial_loose', e.target.value === '' ? '' : parseInt(e.target.value))}
+                                placeholder="0"
+                                className="w-full bg-row-alt border border-border p-2 text-xs font-mono text-right rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              
-              <button 
-                type="button" onClick={addVariant}
-                className="mt-4 flex items-center gap-2 text-[13px] font-bold text-[#A83D24] hover:text-[#8a311d] transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Add another variant
-              </button>
+
+              {/* Desktop View: Grid Rows */}
+              <div className="hidden sm:block space-y-2">
+                {variants.map((v, idx) => {
+                  const isLoss = Number(v.cost_price) > 0 && Number(v.selling_price) < Number(v.cost_price);
+                  return (
+                    <div key={idx} className="p-3 bg-surface border border-border rounded-xl flex items-center gap-2.5 shadow-2xs">
+                      <div className="flex-1 min-w-[120px]">
+                        <input 
+                          type="text" 
+                          value={v.name} 
+                          onChange={e => updateVariant(idx, 'name', e.target.value)} 
+                          required
+                          placeholder="Variant Name (e.g. Red / M)"
+                          className="w-full bg-row-alt border border-border p-2 text-xs font-semibold rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="w-24">
+                        <input 
+                          type="number" 
+                          min="0" 
+                          step="0.01" 
+                          value={v.cost_price} 
+                          onFocus={e => e.target.select()}
+                          onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                          onChange={e => updateVariant(idx, 'cost_price', e.target.value === '' ? '' : parseFloat(e.target.value))} 
+                          required
+                          placeholder="Cost"
+                          className="w-full bg-row-alt border border-border p-2 text-xs font-mono font-bold text-right rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="w-24 relative">
+                        <input 
+                          type="number" 
+                          min="0" 
+                          step="0.01" 
+                          value={v.selling_price} 
+                          onFocus={e => e.target.select()}
+                          onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                          onChange={e => updateVariant(idx, 'selling_price', e.target.value === '' ? '' : parseFloat(e.target.value))} 
+                          required
+                          placeholder="Sell"
+                          className={`w-full bg-row-alt border p-2 text-xs font-mono font-bold text-right rounded-lg text-ink-primary focus:ring-1 focus:outline-none ${
+                            isLoss ? 'border-amber-500 text-amber-900' : 'border-border focus:ring-accent'
+                          }`}
+                        />
+                        {isLoss && (
+                          <span className="absolute -top-2 right-1 text-[8px] bg-amber-100 text-amber-900 px-1 rounded font-bold border border-amber-300">
+                            Loss
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="w-28">
+                        <input 
+                          type="text" 
+                          value={v.barcode} 
+                          onChange={e => updateVariant(idx, 'barcode', e.target.value)}
+                          placeholder="Barcode (Auto)"
+                          className="w-full bg-row-alt border border-border p-2 text-xs font-mono rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                        />
+                      </div>
+
+                      {!v.id && (
+                        <>
+                          <div className="w-16">
+                            <input 
+                              type="number" 
+                              min="0" 
+                              value={v.initial_sets} 
+                              onFocus={e => e.target.select()}
+                              onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                              onChange={e => updateVariant(idx, 'initial_sets', e.target.value === '' ? '' : parseInt(e.target.value))}
+                              placeholder="Sets"
+                              className="w-full bg-row-alt border border-border p-2 text-xs font-mono text-right rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                            />
+                          </div>
+                          <div className="w-16">
+                            <input 
+                              type="number" 
+                              min="0" 
+                              value={v.initial_loose} 
+                              onFocus={e => e.target.select()}
+                              onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                              onChange={e => updateVariant(idx, 'initial_loose', e.target.value === '' ? '' : parseInt(e.target.value))}
+                              placeholder="Loose"
+                              className="w-full bg-row-alt border border-border p-2 text-xs font-mono text-right rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {variants.length > 1 && (
+                        <button 
+                          type="button" 
+                          onClick={() => removeVariant(idx)} 
+                          className="p-2 text-ink-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            
           </form>
         </div>
 
-        <div className="p-6 bg-white border-t border-border rounded-b-[16px] flex justify-end gap-3">
+        {/* Footer */}
+        <div className="p-4 sm:p-5 bg-surface border-t border-border flex items-center justify-end gap-2.5 shrink-0">
           <button 
-            type="button" onClick={onClose} disabled={loading}
-            className="px-5 py-2.5 text-[14px] font-bold text-ink-primary hover:bg-row-alt rounded-[8px] transition-colors"
+            type="button" 
+            onClick={onClose} 
+            disabled={loading}
+            className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition"
           >
             Cancel
           </button>
           <button 
-            type="submit" form="productForm" disabled={loading || categories.length === 0}
-            className="px-5 py-2.5 bg-[#A83D24] hover:bg-[#8a311d] text-white text-[14px] font-bold rounded-[8px] transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            type="submit" 
+            form="productForm" 
+            disabled={loading || categories.length === 0}
+            className="px-5 py-2 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {initialData ? 'Save Changes' : 'Create Product'}
+            <span>{initialData ? 'Save Changes' : 'Create Product'}</span>
           </button>
         </div>
-
       </div>
     </div>
   );

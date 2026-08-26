@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Pencil, Trash2, Check } from 'lucide-react';
+import { X, Pencil, Trash2, Check, Layers, Plus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/lib/actions/categories';
 
@@ -78,7 +78,7 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
 
   const handleDelete = async (id: string) => {
     if (isSubmittingRef.current || loading) return;
-    if (!window.confirm('Are you sure you want to delete this category?')) return;
+    if (!window.confirm('Are you sure you want to delete this category? Products in this category will become Uncategorized.')) return;
     isSubmittingRef.current = true;
     setLoading(true);
     try {
@@ -98,92 +98,147 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1F1A17]/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-surface rounded-[16px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] w-full max-w-md overflow-hidden transform animate-in zoom-in-95 duration-200">
-        
-        <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="text-[16px] font-bold text-ink-primary">Product categories</h2>
-          <button onClick={onClose} className="text-ink-muted hover:text-ink-primary transition-colors">
+    <div 
+      className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto cursor-pointer animate-in fade-in duration-150"
+      onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}
+    >
+      <div 
+        className="relative bg-surface w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[88vh] my-auto border border-border overflow-hidden animate-in zoom-in-95 duration-150 cursor-default"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-5 bg-surface border-b border-border shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center text-accent">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-ink-primary">Product Categories</h2>
+              <p className="text-xs text-ink-muted mt-0.5">Create and manage catalog categories</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose} 
+            disabled={loading}
+            className="p-2 text-ink-muted hover:text-ink-primary hover:bg-row-alt rounded-full transition"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-5">
-          <form onSubmit={handleAdd} className="mb-6">
-            <label className="block text-[13px] font-medium text-ink-primary mb-2">New category</label>
+        {/* Content Body */}
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+          {/* Add Category Form */}
+          <form onSubmit={handleAdd} className="space-y-1.5">
+            <label className="block text-xs font-bold text-ink-primary">Add New Category</label>
             <div className="flex gap-2">
               <input 
                 type="text" 
                 value={newCat} 
                 onChange={e => setNewCat(e.target.value)} 
-                placeholder="e.g. Men, Women, Kids"
-                className="flex-1 p-2.5 bg-surface border border-border rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-[#A83D24]"
+                placeholder="e.g. Shirts, Pants, Jackets"
+                className="flex-1 p-2.5 bg-surface border border-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-accent focus:outline-none"
               />
               <button 
                 type="submit" 
                 disabled={loading || !newCat.trim()}
-                className="px-5 bg-[#A83D24]/50 hover:bg-[#A83D24] text-white font-medium rounded-[8px] transition-colors disabled:opacity-50 text-[14px]"
+                className="px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl transition flex items-center gap-1 shadow-xs disabled:opacity-50"
               >
-                Add
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                <span>Add</span>
               </button>
             </div>
           </form>
 
-          <div className="border border-border rounded-[12px] divide-y divide-border overflow-hidden">
-            {categories.length === 0 ? (
-              <div className="p-4 text-center text-[13px] text-ink-muted bg-row-alt">No categories yet.</div>
-            ) : (
-              categories.map(cat => (
-                <div key={cat.id} className="flex items-center justify-between p-4 bg-surface hover:bg-row-alt transition-colors group">
-                  {editingId === cat.id ? (
-                    <div className="flex items-center gap-2 flex-1 mr-2">
-                      <input 
-                        autoFocus
-                        type="text" 
-                        value={editName} 
-                        onChange={e => setEditName(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            saveEdit();
-                          } else if (e.key === 'Escape') {
-                            setEditingId(null);
-                          }
-                        }}
-                        className="flex-1 p-1.5 bg-surface border border-[#A83D24] rounded-[6px] text-[14px] outline-none"
-                      />
-                      <button onClick={saveEdit} disabled={loading} className="text-green-600 hover:bg-green-50 p-1.5 rounded-[6px]">
-                        <Check className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => setEditingId(null)} className="text-ink-muted hover:bg-border p-1.5 rounded-[6px]">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-[14px] font-medium text-ink-primary">{cat.name}</span>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => startEdit(cat)} className="text-ink-muted hover:text-ink-primary p-1">
-                          <Pencil className="w-4 h-4" />
+          {/* Categories List */}
+          <div className="space-y-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-ink-muted block">
+              Existing Categories ({categories.length})
+            </span>
+
+            <div className="border border-border rounded-xl divide-y divide-border overflow-hidden bg-surface">
+              {categories.length === 0 ? (
+                <div className="p-5 text-center text-xs text-ink-muted bg-row-alt/40">
+                  No categories created yet.
+                </div>
+              ) : (
+                categories.map(cat => (
+                  <div key={cat.id} className="flex items-center justify-between p-3 bg-surface hover:bg-row-alt/50 transition-colors">
+                    {editingId === cat.id ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input 
+                          autoFocus
+                          type="text" 
+                          value={editName} 
+                          onChange={e => setEditName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              saveEdit();
+                            } else if (e.key === 'Escape') {
+                              setEditingId(null);
+                            }
+                          }}
+                          className="flex-1 p-1.5 bg-row-alt border border-accent rounded-lg text-xs font-semibold outline-none"
+                        />
+                        <button 
+                          type="button" 
+                          onClick={saveEdit} 
+                          disabled={loading} 
+                          className="text-emerald-600 hover:bg-emerald-50 p-1.5 rounded-lg transition"
+                        >
+                          <Check className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(cat.id)} disabled={loading} className="text-ink-muted hover:text-red-600 p-1">
-                          <Trash2 className="w-4 h-4" />
+                        <button 
+                          type="button" 
+                          onClick={() => setEditingId(null)} 
+                          className="text-ink-muted hover:bg-row-alt p-1.5 rounded-lg transition"
+                        >
+                          <X className="w-4 h-4" />
                         </button>
                       </div>
-                    </>
-                  )}
-                </div>
-              ))
-            )}
+                    ) : (
+                      <>
+                        <span className="text-xs font-bold text-ink-primary">{cat.name}</span>
+                        {/* Always visible action buttons for mobile touch devices */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button 
+                            type="button" 
+                            onClick={() => startEdit(cat)} 
+                            className="text-ink-muted hover:text-accent p-1.5 hover:bg-row-alt rounded-lg transition"
+                            title="Edit Category"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => handleDelete(cat.id)} 
+                            disabled={loading} 
+                            className="text-ink-muted hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition"
+                            title="Delete Category"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="p-5 border-t border-border flex justify-end">
-          <button onClick={onClose} className="px-6 py-2 bg-transparent border border-[#A83D24] text-[#A83D24] hover:bg-[#A83D24]/5 font-medium rounded-[8px] transition-colors text-[14px]">
+        {/* Footer */}
+        <div className="p-4 bg-surface border-t border-border flex justify-end shrink-0">
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="px-5 py-2 bg-surface border border-border hover:bg-row-alt text-ink-primary font-bold rounded-xl transition text-xs shadow-2xs"
+          >
             Done
           </button>
         </div>
-
       </div>
     </div>
   );
