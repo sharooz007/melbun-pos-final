@@ -10,9 +10,9 @@ export const metadata = {
 
 export default function CustomersPage() {
   return (
-    <div className="h-full overflow-hidden flex flex-col bg-[#EFECE6] p-4 pb-28 lg:p-8">
-      <div className="max-w-[1000px] w-full mx-auto flex-1 flex flex-col min-h-0">
-        <h1 className="text-[24px] font-bold text-ink-primary mb-6">Customers</h1>
+    <div className="flex-1 overflow-y-auto bg-canvas p-4 pb-28 md:p-6 lg:p-8">
+      <div className="max-w-6xl w-full mx-auto flex flex-col min-h-0 space-y-4">
+        <h1 className="text-xl sm:text-2xl font-bold text-ink-primary">Customers Directory</h1>
         <CustomersClient />
       </div>
     </div>
