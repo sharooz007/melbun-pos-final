@@ -205,12 +205,6 @@ export default function InvoicesClient({
   const handleConfirmVoid = async () => {
     if (isSubmittingRef.current || loading || !selectedInvoice) return;
 
-    const trimmedReason = reason.trim();
-    if (trimmedReason.length < 3) {
-      setValidationError('Please enter a valid void reason (min 3 characters).');
-      return;
-    }
-
     try {
       isSubmittingRef.current = true;
       setLoading(true);
@@ -219,7 +213,7 @@ export default function InvoicesClient({
 
       const res = await voidInvoiceAction({
         invoice_id: selectedInvoice.id,
-        reason: trimmedReason
+        reason: 'Voided by user'
       });
 
       if (!res.success) {
@@ -719,31 +713,16 @@ export default function InvoicesClient({
               </p>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
-                Reason for Voiding <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={reason}
-                onChange={(e) => {
-                  setReason(e.target.value);
-                  if (validationError) setValidationError(null);
-                }}
-                placeholder="e.g. Customer returned items immediately, Cashier entry error..."
-                rows={3}
-                className="w-full text-sm p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none"
-              />
-              {validationError && (
-                <p className="text-xs text-red-600 font-medium">{validationError}</p>
-              )}
-            </div>
+            {validationError && (
+              <p className="text-xs text-red-600 font-medium">{validationError}</p>
+            )}
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={closeVoidModal}
                 disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -751,9 +730,16 @@ export default function InvoicesClient({
                 type="button"
                 onClick={handleConfirmVoid}
                 disabled={loading}
-                className="px-5 py-2 text-sm font-semibold text-white bg-accent hover:bg-accent-hover rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-5 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                {loading ? 'Voiding & Restocking...' : 'Confirm Void'}
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Voiding...
+                  </>
+                ) : (
+                  'Confirm Void'
+                )}
               </button>
             </div>
           </div>

@@ -9,8 +9,9 @@ const voidInvoiceSchema = z.object({
   reason: z
     .string()
     .trim()
-    .min(3, 'A reason for voiding must be provided (min 3 characters)')
     .max(500, 'Reason cannot exceed 500 characters')
+    .optional()
+    .default('Voided by user')
 });
 
 const undoVoidInvoiceSchema = z.object({

@@ -44,7 +44,18 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
   };
 
   const addVariant = () => {
-    setVariants([...variants, { name: '', barcode: '', cost_price: 0, selling_price: 0, initial_sets: '', initial_loose: '' }]);
+    const prevVariant = variants.length > 0 ? variants[variants.length - 1] : null;
+    setVariants([
+      ...variants,
+      {
+        name: '',
+        barcode: '',
+        cost_price: prevVariant ? prevVariant.cost_price : 0,
+        selling_price: prevVariant ? prevVariant.selling_price : 0,
+        initial_sets: prevVariant ? prevVariant.initial_sets : '',
+        initial_loose: prevVariant ? prevVariant.initial_loose : ''
+      }
+    ]);
   };
 
   const removeVariant = (index: number) => {

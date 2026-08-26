@@ -44,7 +44,6 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
 
   // Void modal
   const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
-  const [voidReason, setVoidReason] = useState('');
   const [voidLoading, setVoidLoading] = useState(false);
   const [voidError, setVoidError] = useState<string | null>(null);
 
@@ -137,17 +136,12 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
 
   const handleConfirmVoid = async () => {
     if (isSubmittingRef.current || voidLoading || !invoice) return;
-    const cleanReason = voidReason.trim();
-    if (cleanReason.length < 3) {
-      setVoidError('Please enter a valid void reason (min 3 characters).');
-      return;
-    }
 
     try {
       isSubmittingRef.current = true;
       setVoidLoading(true);
       setVoidError(null);
-      const res = await voidInvoiceAction({ invoice_id: invoice.id, reason: cleanReason });
+      const res = await voidInvoiceAction({ invoice_id: invoice.id, reason: 'Voided by user' });
       if (res.success) {
         setIsVoidModalOpen(false);
         await loadInvoice();
@@ -309,7 +303,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
           </button>
           {!invoice.is_voided ? (
             <button
-              onClick={() => { setVoidReason(''); setVoidError(null); setIsVoidModalOpen(true); }}
+              onClick={() => { setVoidError(null); setIsVoidModalOpen(true); }}
               className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition"
             >
               <Ban className="w-4 h-4" />
@@ -571,27 +565,34 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
         </div>
       </div>
 
+      {/* Mobile Bottom Clearance Spacer to ensure "Returns & Refunds" is 100% visible above mobile bottom navbar */}
+      <div className="h-28 md:hidden shrink-0 pointer-events-none" aria-hidden="true" />
+
       {/* Modals with z-[200] */}
       {/* Void Modal */}
       {isVoidModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto cursor-pointer" onClick={() => !voidLoading && setIsVoidModalOpen(false)}>
-          <div className="bg-surface rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 cursor-default border border-border" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-ink-primary">Void Invoice #{invoice.invoice_number}</h3>
-            <p className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200">
-              ⚠️ Voiding this invoice will restore line item quantities to inventory stock and void all associated payment records.
+          <div className="bg-surface rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 cursor-default border border-border animate-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 text-red-600 rounded-xl">
+                <Ban className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-ink-primary">Void Invoice #{invoice.invoice_number}?</h3>
+                <p className="text-xs text-ink-muted">Reverse this invoice &amp; return items to stock</p>
+              </div>
+            </div>
+            <p className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 leading-relaxed">
+              ⚠️ Voiding this invoice will restore all item quantities to inventory stock and cancel all recorded payments.
             </p>
-            <textarea
-              value={voidReason}
-              onChange={e => setVoidReason(e.target.value)}
-              placeholder="Reason for voiding (min 3 characters)..."
-              rows={3}
-              className="w-full text-sm p-3 border border-border rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none"
-            />
             {voidError && <p className="text-xs text-red-600 font-bold">{voidError}</p>}
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setIsVoidModalOpen(false)} disabled={voidLoading} className="px-4 py-2 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl">Cancel</button>
-              <button onClick={handleConfirmVoid} disabled={voidLoading} className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-50">
-                {voidLoading ? 'Voiding...' : 'Confirm Void'}
+              <button onClick={() => setIsVoidModalOpen(false)} disabled={voidLoading} className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={handleConfirmVoid} disabled={voidLoading} className="px-5 py-2.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition disabled:opacity-50 flex items-center gap-1.5 shadow-xs cursor-pointer">
+                {voidLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{voidLoading ? 'Voiding...' : 'Yes, Void Invoice'}</span>
               </button>
             </div>
           </div>
