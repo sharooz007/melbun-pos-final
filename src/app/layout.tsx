@@ -34,7 +34,12 @@ export default function RootLayout({
           <TopBar />
           
           <main className="flex-1 overflow-y-auto overflow-x-hidden relative flex flex-col min-h-0">
-            {children}
+            <div className="flex-1 flex flex-col min-w-0">
+              {children}
+            </div>
+            
+            {/* Mobile Bottom Navigation Physical Clearance (Guarantees WebKit scrollHeight calculation above fixed navbar) */}
+            <div className="h-28 md:hidden shrink-0 pointer-events-none" aria-hidden="true" />
             
             <Toaster 
               position="top-center" 

@@ -650,36 +650,36 @@ export default function InvoicesClient({
             )}
           </tbody>
         </table>
+      </div>
 
-        {/* Server-Side Pagination Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
-          <div>
-            Showing <span className="font-bold text-gray-900">{totalCount > 0 ? (currentPage - 1) * 25 + 1 : 0}</span> to{' '}
-            <span className="font-bold text-gray-900">{Math.min(currentPage * 25, totalCount)}</span> of{' '}
-            <span className="font-bold text-gray-900">{totalCount}</span> invoices
-          </div>
+      {/* Universal Server-Side Pagination Footer (Mobile & Desktop) */}
+      <div className="p-4 bg-surface rounded-xl border border-border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-ink-muted">
+        <div>
+          Showing <span className="font-bold text-ink-primary font-mono">{totalCount > 0 ? (currentPage - 1) * 25 + 1 : 0}</span> to{' '}
+          <span className="font-bold text-ink-primary font-mono">{Math.min(currentPage * 25, totalCount)}</span> of{' '}
+          <span className="font-bold text-ink-primary font-mono">{totalCount}</span> invoices
+        </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage <= 1 || isFetching}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-              Previous
-            </button>
-            <span className="px-2 font-semibold text-gray-800">
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage >= totalPages || isFetching}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-            >
-              Next
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage <= 1 || isFetching}
+            className="px-3.5 py-1.5 rounded-lg border border-border bg-surface font-bold text-ink-primary hover:bg-row-alt disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition cursor-pointer"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            Previous
+          </button>
+          <span className="px-2 font-mono font-bold text-ink-primary">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages || isFetching}
+            className="px-3.5 py-1.5 rounded-lg border border-border bg-surface font-bold text-ink-primary hover:bg-row-alt disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition cursor-pointer"
+          >
+            Next
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -764,7 +764,7 @@ export default function InvoicesClient({
       {inspectInvoice && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget && !inspectLoading) setInspectInvoice(null); }}
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto cursor-pointer"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 pb-28 sm:p-4 overflow-y-auto cursor-pointer"
         >
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] sm:max-h-[90vh] my-auto flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200 cursor-default">
             <div className="flex items-center justify-between border-b border-gray-100 p-4 sm:p-6 pb-4 shrink-0">
