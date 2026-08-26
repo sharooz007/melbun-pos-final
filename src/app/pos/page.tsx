@@ -1048,15 +1048,15 @@ function POSContent() {
             )}
           </div>
           
-          {/* MOBILE ONLY: Sticky Checkout Bar */}
-          <div className="lg:hidden shrink-0 p-4 pb-[88px] bg-surface border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.05)] z-40">
+          {/* MOBILE ONLY: Sticky Checkout Bar (Snug fit directly above mobile navigation bar) */}
+          <div className="lg:hidden shrink-0 p-3.5 pb-20 bg-surface border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.05)] z-40">
             <button
               onClick={() => setIsMobileCheckoutOpen(true)}
               disabled={cart.length === 0}
-              className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-bold py-3.5 rounded-[12px] flex items-center justify-between px-6 transition-transform active:scale-[0.98]"
+              className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-bold py-3.5 rounded-[12px] flex items-center justify-between px-5 transition-transform active:scale-[0.98] shadow-sm min-h-[48px]"
             >
-              <span>Proceed to Checkout</span>
-              <span>₹{finalTotal.toFixed(2)}</span>
+              <span className="text-[15px] font-bold">Proceed to Checkout</span>
+              <span className="font-mono text-[16px] font-extrabold">₹{finalTotal.toFixed(2)}</span>
             </button>
           </div>
         </div>
