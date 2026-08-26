@@ -51,7 +51,7 @@ const round2 = (num: number): number => Math.round((num + Number.EPSILON) * 100)
 function POSContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const editInvoiceIdParam = searchParams.get('editInvoiceId');
+  const editInvoiceIdParam = searchParams.get('edit_invoice_id') || searchParams.get('editInvoiceId');
 
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null);
   const [editInvoiceNumber, setEditInvoiceNumber] = useState<string | null>(null);

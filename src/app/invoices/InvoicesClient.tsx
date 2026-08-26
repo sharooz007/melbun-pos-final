@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   voidInvoiceAction, 
@@ -27,7 +28,9 @@ import {
   Edit3,
   Calendar,
   User,
-  HelpCircle
+  HelpCircle,
+  Ban,
+  FileText
 } from 'lucide-react';
 
 export interface InvoiceItem {
@@ -116,6 +119,27 @@ export default function InvoicesClient({
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery, fetchInvoices]);
+
+  // Auto-inspect deep link effect
+  useEffect(() => {
+    const invId = searchParams.get('invoice_id');
+    const invNumber = searchParams.get('invoice_number');
+    if (invId) {
+      (async () => {
+        setInspectLoading(true);
+        try {
+          const res = await getFullInvoiceAction(invId);
+          if (res.success && res.data) {
+            setInspectInvoice(res.data);
+          }
+        } finally {
+          setInspectLoading(false);
+        }
+      })();
+    } else if (invNumber) {
+      setSearchQuery(invNumber);
+    }
+  }, [searchParams]);
 
   // Global Escape keydown listener to close open modals
   useEffect(() => {
@@ -685,7 +709,7 @@ export default function InvoicesClient({
       {selectedInvoice && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget && !loading) closeVoidModal(); }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 cursor-pointer"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto cursor-pointer"
         >
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-in fade-in zoom-in duration-150 cursor-default">
             <div className="flex justify-between items-start">
@@ -762,10 +786,10 @@ export default function InvoicesClient({
       {inspectInvoice && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget && !inspectLoading) setInspectInvoice(null); }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#1F1A17]/40 backdrop-blur-sm p-4 animate-in fade-in duration-200 cursor-pointer"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto cursor-pointer"
         >
-          <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 animate-in zoom-in-95 duration-200 cursor-default">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] sm:max-h-[90vh] my-auto flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200 cursor-default">
+            <div className="flex items-center justify-between border-b border-gray-100 p-4 sm:p-6 pb-4 shrink-0">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-accent" />
@@ -783,128 +807,206 @@ export default function InvoicesClient({
               </button>
             </div>
 
-            {/* Customer & Financial Summary */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 p-4 bg-gray-50 rounded-xl text-xs">
-              <div>
-                <span className="text-gray-500 block">Customer</span>
-                <span className="font-bold text-gray-900">{inspectInvoice.customers?.name || 'Walk-in Customer'}</span>
-                {inspectInvoice.customers?.phone && (
-                  <span className="text-gray-500 block font-mono">{inspectInvoice.customers.phone}</span>
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Customer & Financial Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 p-4 bg-gray-50 rounded-xl text-xs">
+                <div>
+                  <span className="text-gray-500 block">Customer</span>
+                  <span className="font-bold text-gray-900">{inspectInvoice.customers?.name || 'Walk-in Customer'}</span>
+                  {inspectInvoice.customers?.phone && (
+                    <span className="text-gray-500 block font-mono">{inspectInvoice.customers.phone}</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-gray-500 block">Subtotal</span>
+                  <span className="font-bold text-gray-900 font-mono">₹{Number(inspectInvoice.subtotal || 0).toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500 block">Discount</span>
+                  <span className="font-bold text-amber-700 font-mono">₹{Number(inspectInvoice.discount_amount || 0).toFixed(2)}</span>
+                </div>
+                {inspectInvoice.gst_applied && (
+                  <div>
+                    <span className="text-gray-500 block">GST (CGST+SGST)</span>
+                    <span className="font-bold text-blue-700 font-mono">
+                      ₹{(Number(inspectInvoice.cgst_amount || 0) + Number(inspectInvoice.sgst_amount || 0)).toFixed(2)}
+                    </span>
+                  </div>
                 )}
-              </div>
-              <div>
-                <span className="text-gray-500 block">Subtotal</span>
-                <span className="font-bold text-gray-900 font-mono">₹{Number(inspectInvoice.subtotal || 0).toFixed(2)}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Discount</span>
-                <span className="font-bold text-amber-700 font-mono">₹{Number(inspectInvoice.discount_amount || 0).toFixed(2)}</span>
-              </div>
-              {inspectInvoice.gst_applied && (
+                {Number(inspectInvoice.round_off || 0) !== 0 && (
+                  <div>
+                    <span className="text-gray-500 block">Round Off</span>
+                    <span className="font-bold text-gray-700 font-mono">₹{Number(inspectInvoice.round_off || 0).toFixed(2)}</span>
+                  </div>
+                )}
                 <div>
-                  <span className="text-gray-500 block">GST (CGST+SGST)</span>
-                  <span className="font-bold text-blue-700 font-mono">
-                    ₹{(Number(inspectInvoice.cgst_amount || 0) + Number(inspectInvoice.sgst_amount || 0)).toFixed(2)}
-                  </span>
+                  <span className="text-gray-500 block">Final Total</span>
+                  <span className="font-bold text-emerald-700 font-mono text-sm">₹{Number(inspectInvoice.final_total || 0).toFixed(2)}</span>
                 </div>
-              )}
-              {Number(inspectInvoice.round_off || 0) !== 0 && (
-                <div>
-                  <span className="text-gray-500 block">Round Off</span>
-                  <span className="font-bold text-gray-700 font-mono">₹{Number(inspectInvoice.round_off || 0).toFixed(2)}</span>
-                </div>
-              )}
-              <div>
-                <span className="text-gray-500 block">Final Total</span>
-                <span className="font-bold text-emerald-700 font-mono text-sm">₹{Number(inspectInvoice.final_total || 0).toFixed(2)}</span>
               </div>
-            </div>
 
-            {/* Line Items Table */}
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Purchased Items</h4>
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold">
-                    <tr>
-                      <th className="py-2.5 px-3">Item / Variant</th>
-                      <th className="py-2.5 px-3 text-center">Sets</th>
-                      <th className="py-2.5 px-3 text-center">Loose</th>
-                      <th className="py-2.5 px-3 text-center">Total Pcs</th>
-                      <th className="py-2.5 px-3 text-right">Unit Price</th>
-                      <th className="py-2.5 px-3 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(inspectInvoice.invoice_items || []).map((item: any) => {
-                      const pName = item.variants?.products?.name || 'Product';
-                      const vName = item.variants?.name || 'Variant';
-                      const piecesPerSet = item.variants?.products?.pieces_per_set || 1;
-                      const setsQty = item.sets_quantity || 0;
-                      const looseQty = item.loose_quantity || (item.quantity - (setsQty * piecesPerSet));
-                      const itemTotal = Number(item.quantity * item.selling_price_snapshot);
+              {/* Line Items Table */}
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Purchased Items</h4>
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-semibold">
+                      <tr>
+                        <th className="py-2.5 px-3">Item / Variant</th>
+                        <th className="py-2.5 px-3 text-center">Sets</th>
+                        <th className="py-2.5 px-3 text-center">Loose</th>
+                        <th className="py-2.5 px-3 text-center">Total Pcs</th>
+                        <th className="py-2.5 px-3 text-right">Unit Price</th>
+                        <th className="py-2.5 px-3 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(inspectInvoice.invoice_items || []).map((item: any) => {
+                        const pName = item.variants?.products?.name || 'Product';
+                        const vName = item.variants?.name || 'Variant';
+                        const piecesPerSet = item.variants?.products?.pieces_per_set || 1;
+                        const setsQty = item.sets_quantity || 0;
+                        const looseQty = item.loose_quantity || (item.quantity - (setsQty * piecesPerSet));
+                        const itemTotal = Number(item.quantity * item.selling_price_snapshot);
 
+                        return (
+                          <tr key={item.id} className="hover:bg-gray-50/50">
+                            <td className="py-2.5 px-3 font-medium text-gray-900">
+                              {pName} <span className="text-gray-500">({vName})</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono">{setsQty}</td>
+                            <td className="py-2.5 px-3 text-center font-mono">{looseQty}</td>
+                            <td className="py-2.5 px-3 text-center font-mono font-semibold">{item.quantity}</td>
+                            <td className="py-2.5 px-3 text-right font-mono">₹{Number(item.selling_price_snapshot).toFixed(2)}</td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900">₹{itemTotal.toFixed(2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Payments List */}
+              {inspectInvoice.payments && inspectInvoice.payments.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Payments Received</h4>
+                  <div className="space-y-1.5">
+                    {inspectInvoice.payments.map((p: any) => {
+                      const isRefund = Number(p.amount) < 0;
                       return (
-                        <tr key={item.id} className="hover:bg-gray-50/50">
-                          <td className="py-2.5 px-3 font-medium text-gray-900">
-                            {pName} <span className="text-gray-500">({vName})</span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-mono">{setsQty}</td>
-                          <td className="py-2.5 px-3 text-center font-mono">{looseQty}</td>
-                          <td className="py-2.5 px-3 text-center font-mono font-semibold">{item.quantity}</td>
-                          <td className="py-2.5 px-3 text-right font-mono">₹{Number(item.selling_price_snapshot).toFixed(2)}</td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900">₹{itemTotal.toFixed(2)}</td>
-                        </tr>
+                        <div key={p.id} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg text-xs font-mono">
+                          <span className={`font-semibold ${isRefund ? 'text-red-700' : 'text-gray-700'}`}>
+                            {isRefund ? 'Refund Offset' : `${p.method} Payment`}
+                          </span>
+                          <span className="text-gray-500">{new Date(p.created_at).toLocaleDateString('en-IN')}</span>
+                          <span className={`font-bold ${isRefund ? 'text-red-700' : 'text-emerald-700'}`}>
+                            {isRefund ? '-' : ''}₹{Math.abs(Number(p.amount)).toFixed(2)}
+                          </span>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Returns History if any */}
+              {inspectInvoice.returns && inspectInvoice.returns.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-red-600 mb-2">Returns / Refunds Recorded</h4>
+                  <div className="space-y-1.5">
+                    {inspectInvoice.returns.map((r: any) => (
+                      <div key={r.id} className="flex justify-between items-center p-2.5 bg-red-50 rounded-lg text-xs font-mono text-red-800">
+                        <span>Return: {r.quantity} pcs ({r.refund_method})</span>
+                        <span className="text-xs text-red-600">{new Date(r.created_at).toLocaleDateString('en-IN')}</span>
+                        <span className="font-bold">-₹{Number(r.total_refund_amount).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Payments List */}
-            {inspectInvoice.payments && inspectInvoice.payments.length > 0 && (
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Payments Received</h4>
-                <div className="space-y-1.5">
-                  {inspectInvoice.payments.map((p: any) => {
-                    const isRefund = Number(p.amount) < 0;
-                    return (
-                      <div key={p.id} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg text-xs font-mono">
-                        <span className={`font-semibold ${isRefund ? 'text-red-700' : 'text-gray-700'}`}>
-                          {isRefund ? 'Refund Offset' : `${p.method} Payment`}
-                        </span>
-                        <span className="text-gray-500">{new Date(p.created_at).toLocaleDateString('en-IN')}</span>
-                        <span className={`font-bold ${isRefund ? 'text-red-700' : 'text-emerald-700'}`}>
-                          {isRefund ? '-' : ''}₹{Math.abs(Number(p.amount)).toFixed(2)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+            {/* Modal Actions Footer */}
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 shrink-0 rounded-b-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                {!inspectInvoice.is_voided && (
+                  <>
+                    <Link
+                      href={`/pos?edit_invoice_id=${inspectInvoice.id}`}
+                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      <span>Edit Invoice</span>
+                    </Link>
+                    <Link
+                      href={`/returns?invoice_number=${encodeURIComponent(inspectInvoice.invoice_number)}`}
+                      className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Return Items</span>
+                    </Link>
+                  </>
+                )}
+                <button
+                  onClick={() => handlePrintPdf(inspectInvoice)}
+                  disabled={printingId === inspectInvoice.id}
+                  className="px-3.5 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition disabled:opacity-50"
+                >
+                  <FileText className="w-4 h-4 text-gray-600" />
+                  <span>{printingId === inspectInvoice.id ? 'Generating...' : 'PDF Receipt'}</span>
+                </button>
+                {!inspectInvoice.is_voided ? (
+                  <button
+                    onClick={() => {
+                      const invItem: InvoiceItem = {
+                        id: inspectInvoice.id,
+                        invoice_number: inspectInvoice.invoice_number,
+                        customer_name: inspectInvoice.customers?.name,
+                        customer_phone: inspectInvoice.customers?.phone,
+                        total_amount: Number(inspectInvoice.final_total || inspectInvoice.total_amount || 0),
+                        is_voided: Boolean(inspectInvoice.is_voided),
+                        created_at: inspectInvoice.created_at,
+                        due_amount: Number(inspectInvoice.due_amount || 0),
+                        paid_amount: Number(inspectInvoice.paid_amount || 0),
+                        status: inspectInvoice.status || 'Paid'
+                      };
+                      setInspectInvoice(null);
+                      openVoidModal(invItem);
+                    }}
+                    className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition"
+                  >
+                    <Ban className="w-4 h-4" />
+                    <span>Void</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const invItem: InvoiceItem = {
+                        id: inspectInvoice.id,
+                        invoice_number: inspectInvoice.invoice_number,
+                        customer_name: inspectInvoice.customers?.name,
+                        customer_phone: inspectInvoice.customers?.phone,
+                        total_amount: Number(inspectInvoice.final_total || inspectInvoice.total_amount || 0),
+                        is_voided: Boolean(inspectInvoice.is_voided),
+                        created_at: inspectInvoice.created_at,
+                        due_amount: Number(inspectInvoice.due_amount || 0),
+                        paid_amount: Number(inspectInvoice.paid_amount || 0),
+                        status: inspectInvoice.status || 'Void'
+                      };
+                      setInspectInvoice(null);
+                      openUndoModal(invItem);
+                    }}
+                    className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold rounded-xl flex items-center gap-1.5 transition"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Undo Void</span>
+                  </button>
+                )}
               </div>
-            )}
-
-            {/* Returns History if any */}
-            {inspectInvoice.returns && inspectInvoice.returns.length > 0 && (
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-red-600 mb-2">Returns / Refunds Recorded</h4>
-                <div className="space-y-1.5">
-                  {inspectInvoice.returns.map((r: any) => (
-                    <div key={r.id} className="flex justify-between items-center p-2.5 bg-red-50 rounded-lg text-xs font-mono text-red-800">
-                      <span>Return: {r.quantity} pcs ({r.refund_method})</span>
-                      <span className="text-xs text-red-600">{new Date(r.created_at).toLocaleDateString('en-IN')}</span>
-                      <span className="font-bold">-₹{Number(r.total_refund_amount).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end pt-2 border-t border-gray-100">
               <button
                 onClick={() => setInspectInvoice(null)}
-                className="px-5 py-2 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold rounded-xl transition"
               >
                 Close
               </button>
@@ -917,7 +1019,7 @@ export default function InvoicesClient({
       {undoInvoice && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget && !undoLoading) closeUndoModal(); }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 cursor-pointer"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150 cursor-pointer"
         >
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-in zoom-in duration-150 cursor-default">
             <div className="flex justify-between items-start">
@@ -995,7 +1097,7 @@ export default function InvoicesClient({
       {deleteInvoice && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget && !deleteLoading) closeDeleteModal(); }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 cursor-pointer"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150 cursor-pointer"
         >
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-in zoom-in duration-150 cursor-default">
             <div className="flex justify-between items-start">

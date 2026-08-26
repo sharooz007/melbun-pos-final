@@ -3,7 +3,8 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   lookupInvoiceAction, 
   processReturnAction, 
@@ -34,7 +35,8 @@ import {
   FileText,
   ShieldCheck,
   Ban,
-  Wallet
+  Wallet,
+  Loader2
 } from 'lucide-react';
 
 const formatINR = (amount: number) => {
@@ -45,11 +47,37 @@ const formatINR = (amount: number) => {
   }).format(amount);
 };
 
-export default function ReturnsPage() {
+function ReturnsContent() {
+  const searchParams = useSearchParams();
+
   // State: Search & Active Invoice
   const [invoiceQuery, setInvoiceQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceLookupData | null>(null);
+
+  // Auto-lookup on mount with deep-link support
+  useEffect(() => {
+    const invNumber = searchParams.get('invoice_number') || searchParams.get('invoice_id');
+    if (invNumber) {
+      setInvoiceQuery(invNumber);
+      (async () => {
+        setSearching(true);
+        setStatus(null);
+        try {
+          const res = await lookupInvoiceAction(invNumber);
+          if (res.success && res.data) {
+            setInvoice(res.data);
+          } else {
+            setStatus({ type: 'error', msg: res.error || 'Invoice not found.' });
+          }
+        } catch (err: any) {
+          setStatus({ type: 'error', msg: err?.message || 'Failed to lookup invoice.' });
+        } finally {
+          setSearching(false);
+        }
+      })();
+    }
+  }, [searchParams]);
 
   // State: Return Modal Form
   const [selectedItem, setSelectedItem] = useState<InvoiceItemWithReturns | null>(null);
@@ -853,5 +881,17 @@ export default function ReturnsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ReturnsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center bg-[#EFECE6]">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      </div>
+    }>
+      <ReturnsContent />
+    </Suspense>
   );
 }

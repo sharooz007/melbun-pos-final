@@ -4,6 +4,7 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   BarChart3, 
   Download, 
@@ -67,6 +68,7 @@ const TAB_LABELS: { key: TabKey; label: string }[] = [
 ];
 
 export default function ReportsPage() {
+  const router = useRouter();
   // Store Settings (Business Day Start Cutoff)
   const [startHour, setStartHour] = useState<number>(6);
   const [timezone, setTimezone] = useState<string>('Asia/Kolkata');
@@ -956,7 +958,11 @@ export default function ReportsPage() {
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {paginatedTabRows.map((inv: any) => (
-                          <tr key={inv.id} className="hover:bg-gray-50/70 transition">
+                          <tr 
+                            key={inv.id} 
+                            onClick={() => router.push(`/invoices?invoice_id=${inv.id}`)}
+                            className="hover:bg-gray-50/70 transition cursor-pointer"
+                          >
                             <td className={`py-3 px-4 font-mono font-bold ${inv.is_voided ? 'line-through text-red-500' : 'text-gray-900'}`}>
                               {inv.invoice_number}
                             </td>
