@@ -140,7 +140,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl w-full mx-auto space-y-8">
+    <div className="p-4 pb-28 md:p-8 max-w-5xl w-full mx-auto space-y-8">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

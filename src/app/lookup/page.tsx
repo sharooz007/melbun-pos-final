@@ -119,7 +119,7 @@ export default function LookupPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl w-full mx-auto space-y-8">
+    <div className="p-4 pb-28 md:p-8 max-w-4xl w-full mx-auto space-y-8">
       <header className="text-center space-y-2">
         <div className="mx-auto w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center text-accent mb-4">
           <ScanBarcode className="w-8 h-8" />

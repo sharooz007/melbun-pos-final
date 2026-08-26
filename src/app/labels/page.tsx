@@ -206,7 +206,7 @@ export default function LabelsPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1600px] w-full mx-auto space-y-6">
+    <div className="p-4 pb-28 md:p-6 max-w-[1600px] w-full mx-auto space-y-6">
       {/* ========================================================================= */}
       {/* 1. SCREEN-ONLY CONTROLS & HEADER (HIDDEN ON PRINT)                        */}
       {/* ========================================================================= */}

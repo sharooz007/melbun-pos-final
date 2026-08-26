@@ -243,7 +243,7 @@ export default function ReturnsPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-7xl w-full mx-auto">
+    <div className="p-4 pb-28 md:p-8 space-y-8 max-w-7xl w-full mx-auto">
       {/* Header */}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

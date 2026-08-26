@@ -41,5 +41,9 @@ export default async function InventoryPage() {
     )
   }
 
-  return <InventoryClient variants={variants || []} categories={categories || []} />
+  return (
+    <div className="p-4 pb-28 md:p-8 max-w-7xl w-full mx-auto">
+      <InventoryClient variants={variants || []} categories={categories || []} />
+    </div>
+  );
 }

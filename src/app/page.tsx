@@ -72,7 +72,7 @@ export default function DashboardPage() {
   }, [fetchMetrics]);
 
   return (
-    <div className="p-3 md:p-6 w-full max-w-7xl mx-auto space-y-5">
+    <div className="p-3 pb-28 md:p-6 w-full max-w-7xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
