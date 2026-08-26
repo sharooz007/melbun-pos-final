@@ -773,6 +773,13 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
         onClose={() => setReceiveModalOpen(false)} 
         onSubmit={handleReceiveSubmit}
         variants={variants}
+        products={productsList}
+        categories={categories}
+        onOpenQuickAdd={() => {
+          setReceiveModalOpen(false);
+          setEditingProduct(null);
+          setAddModalOpen(true);
+        }}
       />
 
       <AddProductModal 
