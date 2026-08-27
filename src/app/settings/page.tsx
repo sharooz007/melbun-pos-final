@@ -3,7 +3,7 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Settings, 
   Store, 
@@ -78,6 +78,7 @@ export default function SettingsPage() {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
   // Form State
@@ -205,7 +206,7 @@ export default function SettingsPage() {
   // Save Settings
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (saving) return;
+    if (isSavingRef.current || saving) return;
 
     const trimmedName = storeName.trim();
     if (!trimmedName) {
@@ -221,6 +222,7 @@ export default function SettingsPage() {
       }
     }
 
+    isSavingRef.current = true;
     try {
       setSaving(true);
       const res = await updateStoreSettingsAction({
@@ -250,6 +252,7 @@ export default function SettingsPage() {
     } catch (err: any) {
       toast.error(err?.message || 'An error occurred while saving.');
     } finally {
+      isSavingRef.current = false;
       setSaving(false);
     }
   };

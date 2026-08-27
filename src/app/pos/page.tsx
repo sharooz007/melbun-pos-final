@@ -360,6 +360,7 @@ function POSContent() {
               setSplitCash(cAmt > 0 ? cAmt.toString() : '');
               setSplitUpi(uAmt > 0 ? uAmt.toString() : '');
               setSplitCredit(crAmt > 0 ? crAmt.toString() : '');
+              justLoadedInvoiceRef.current = true;
               setSplitSaved(true);
             }
           } else {
@@ -704,6 +705,7 @@ function POSContent() {
   }, [preGstTotal, cgstAmount, sgstAmount, roundOffAmount]);
 
   const prevFinalTotalRef = useRef(finalTotal);
+  const justLoadedInvoiceRef = useRef(false);
 
   // Set default amount paid when total changes or method changes
   useEffect(() => {
@@ -716,8 +718,18 @@ function POSContent() {
     } else {
       setAmountPaidStr('');
     }
+
+    if (justLoadedInvoiceRef.current) {
+      justLoadedInvoiceRef.current = false;
+      prevFinalTotalRef.current = finalTotal;
+      return;
+    }
+
+    if (prevFinalTotalRef.current !== finalTotal) {
+      setSplitSaved(false);
+    }
+
     prevFinalTotalRef.current = finalTotal;
-    setSplitSaved(false);
   }, [finalTotal, paymentMethod, amountPaidStr]);
 
   const handleUpdateItem = (variant_id: string, field: 'sets_quantity' | 'loose_quantity', value: number) => {

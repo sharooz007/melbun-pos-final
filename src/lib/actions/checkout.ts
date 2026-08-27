@@ -88,6 +88,15 @@ const refineCheckoutData = (data: z.infer<typeof baseCheckoutObjectSchema>, ctx:
       path: ['customer_id']
     });
   }
+
+  // 5. Overpayment Guard
+  if (totalPaid > round2(data.final_total)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Total payment (₹${totalPaid.toFixed(2)}) cannot exceed final invoice total (₹${data.final_total.toFixed(2)}).`,
+      path: ['payments']
+    });
+  }
 };
 
 export const checkoutSchema = baseCheckoutObjectSchema.superRefine(refineCheckoutData);

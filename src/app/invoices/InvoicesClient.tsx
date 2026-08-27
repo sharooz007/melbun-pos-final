@@ -1028,24 +1028,43 @@ export default function InvoicesClient({
             {/* Modal Actions Footer */}
             <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 shrink-0 rounded-b-2xl">
               <div className="flex flex-wrap items-center gap-2">
-                {!inspectInvoice.is_voided && (
-                  <>
-                    <Link
-                      href={`/pos?edit_invoice_id=${inspectInvoice.id}`}
-                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                      <span>Edit Invoice</span>
-                    </Link>
-                    <Link
-                      href={`/returns?invoice_number=${encodeURIComponent(inspectInvoice.invoice_number)}`}
-                      className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      <span>Return Items</span>
-                    </Link>
-                  </>
-                )}
+                {!inspectInvoice.is_voided && (() => {
+                  const hasReturns = (inspectInvoice.returns && inspectInvoice.returns.length > 0) || Number(inspectInvoice.total_refunds || 0) > 0;
+
+                  return (
+                    <>
+                      {hasReturns ? (
+                        <div className="relative group">
+                          <button
+                            disabled
+                            className="px-3.5 py-2 bg-gray-200 text-gray-400 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-not-allowed"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                            <span>Edit Invoice</span>
+                          </button>
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block bg-gray-900 text-white text-[11px] font-medium px-2.5 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
+                            Editing locked: Returns exist for this invoice
+                          </div>
+                        </div>
+                      ) : (
+                        <Link
+                          href={`/pos?editInvoiceId=${inspectInvoice.id}`}
+                          className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          <span>Edit Invoice</span>
+                        </Link>
+                      )}
+                      <Link
+                        href={`/returns?invoice_number=${encodeURIComponent(inspectInvoice.invoice_number)}`}
+                        className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        <span>Return Items</span>
+                      </Link>
+                    </>
+                  );
+                })()}
                 {/* WhatsApp Receipt Button */}
                 <button
                   type="button"
