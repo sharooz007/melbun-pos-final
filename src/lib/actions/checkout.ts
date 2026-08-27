@@ -179,7 +179,7 @@ export async function processCheckoutAction(payload: unknown) {
   }
 }
 
-const updateFullInvoiceSchema = baseCheckoutObjectSchema.extend({
+export const updateFullInvoiceSchema = baseCheckoutObjectSchema.extend({
   invoice_id: z.string().uuid('Invalid invoice ID')
 }).superRefine(refineCheckoutData);
 

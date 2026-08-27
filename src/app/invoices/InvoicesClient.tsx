@@ -396,6 +396,39 @@ export default function InvoicesClient({
           msg: `Invoice #${undoInvoice.invoice_number} successfully un-voided and inventory re-deducted!`
         });
 
+        // Optimistically update list to un-void invoice immediately with accurate balance and status
+        setInvoices((prev) =>
+          prev.map((inv) => {
+            if (inv.id !== undoInvoice.id) return inv;
+
+            const totalRefunds = Math.round(Number(inv.total_refunds || 0) * 100) / 100;
+            const effTotal = inv.effective_total !== undefined
+              ? Number(inv.effective_total)
+              : Math.max(0, Math.round((Number(inv.total_amount || 0) - totalRefunds) * 100) / 100);
+            const paid = Math.round(Number(inv.paid_amount || 0) * 100) / 100;
+            const calcDue = Math.max(0, Math.round((effTotal - paid) * 100) / 100);
+
+            let restoredStatus: 'Paid' | 'Partial' | 'Credit' | 'Refunded' = 'Paid';
+            if (totalRefunds > 0 && effTotal === 0) {
+              restoredStatus = 'Refunded';
+            } else if (calcDue === 0) {
+              restoredStatus = 'Paid';
+            } else if (paid > 0) {
+              restoredStatus = 'Partial';
+            } else {
+              restoredStatus = 'Credit';
+            }
+
+            return {
+              ...inv,
+              is_voided: false,
+              effective_total: effTotal,
+              due_amount: calcDue,
+              status: restoredStatus
+            };
+          })
+        );
+
         // Refetch current page to accurately reflect updated balances & statuses
         await fetchInvoices(currentPage, searchQuery);
         setUndoInvoice(null);

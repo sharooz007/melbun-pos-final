@@ -31,7 +31,7 @@ import {
 import CameraScanner from '@/components/lookup/CameraScanner';
 import { createClient } from '@/lib/supabase/client';
 import { searchVariantsAction } from '@/lib/actions/pos';
-import { processCheckoutAction, updateFullInvoiceAction } from '@/lib/actions/checkout';
+import { checkoutSchema, updateFullInvoiceSchema } from '@/lib/actions/checkout';
 import { getCustomersListAction, getOrCreateCustomerAction } from '@/lib/actions/customers';
 import { getFullInvoiceAction } from '@/lib/actions/invoices';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
@@ -984,6 +984,41 @@ function formatHumanReadableError(errorMsg: string): string {
         isoTimestamp = new Date(invoiceDateStr).toISOString();
       }
 
+      // Client-Side Zod Schema Validation Tier
+      const payloadToValidate = {
+        customer_id: finalCustomerId || null,
+        created_at: isoTimestamp,
+        subtotal: round2(subtotal),
+        discount_amount: round2(discountAmount),
+        round_off: round2(roundOffAmount),
+        gst_applied: gstApplied,
+        cgst_amount: round2(cgstAmount),
+        sgst_amount: round2(sgstAmount),
+        final_total: round2(finalTotal),
+        items: validCart.map(i => ({
+          variant_id: i.variant_id,
+          sets_quantity: i.sets_quantity,
+          loose_quantity: i.loose_quantity,
+          selling_price_snapshot: round2(i.price)
+        })),
+        payments: payments.map(p => ({
+          amount: round2(p.amount),
+          method: p.method
+        }))
+      };
+
+      const validation = editInvoiceId
+        ? updateFullInvoiceSchema.safeParse({ ...payloadToValidate, invoice_id: editInvoiceId })
+        : checkoutSchema.safeParse(payloadToValidate);
+
+      if (!validation.success) {
+        const errorMsg = validation.error.issues.map((i) => i.message).join('. ');
+        setStatus({ type: 'error', msg: errorMsg });
+        setLoading(false);
+        isSubmittingRef.current = false;
+        return;
+      }
+
       if (editInvoiceId) {
         // EXECUTE FULL INVOICE UPDATE DIRECTLY VIA CLIENT
         const { data: editData, error: editErr } = await supabase.rpc('update_full_invoice', {
@@ -1035,6 +1070,7 @@ function formatHumanReadableError(errorMsg: string): string {
             invoiceNumber: editInvoiceNumber || undefined
           });
           resetFormState();
+          router.refresh();
         }
       } else {
         // EXECUTE NEW CHECKOUT DIRECTLY VIA CLIENT
@@ -1074,18 +1110,19 @@ function formatHumanReadableError(errorMsg: string): string {
             paidAmount: totalPaidAmt,
             dueAmount: pendingDueAmt,
             itemCount: validCart.length,
-            invoiceNumber: checkData.invoice_number,
-            invoiceId: checkData.invoice_id
+            invoiceNumber: checkData.invoice_number || undefined,
+            invoiceId: checkData.invoice_id || undefined
           });
 
           setIsMobileCheckoutOpen(false);
           setStatus({ 
             type: 'success', 
-            msg: `Invoice ${checkData.invoice_number} generated successfully!`,
+            msg: `Invoice #${checkData.invoice_number} created successfully!`,
             invoiceId: checkData.invoice_id,
-            invoiceNumber: checkData.invoice_number
+            invoiceNumber: checkData.invoice_number || undefined
           });
           resetFormState();
+          router.refresh();
         }
       }
     } catch (err: any) {
