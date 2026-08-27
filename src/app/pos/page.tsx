@@ -29,6 +29,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import CameraScanner from '@/components/lookup/CameraScanner';
+import { createClient } from '@/lib/supabase/client';
 import { searchVariantsAction } from '@/lib/actions/pos';
 import { processCheckoutAction, updateFullInvoiceAction } from '@/lib/actions/checkout';
 import { getCustomersListAction, getOrCreateCustomerAction } from '@/lib/actions/customers';
@@ -793,6 +794,37 @@ function POSContent() {
     setEditInvoiceNumber(null);
   };
 
+function formatHumanReadableError(errorMsg: string): string {
+  const clean = (errorMsg || '').toLowerCase();
+  
+  if (clean.includes('unauthorized') || clean.includes('jwt') || clean.includes('auth.uid')) {
+    return 'Your login session has expired. Please sign in again.';
+  }
+  if (clean.includes('insufficient stock') || clean.includes('packaged sets')) {
+    return 'One or more items in the cart exceed available inventory on hand.';
+  }
+  if (clean.includes('store credit') || clean.includes('wallet')) {
+    return `Store credit error: ${errorMsg}`;
+  }
+  if (clean.includes('customer is required') || clean.includes('walk-in')) {
+    return 'A customer must be linked to complete a credit or partial-payment sale.';
+  }
+  if (clean.includes('duplicate key') || clean.includes('unique constraint')) {
+    return 'A record with this number already exists. Please try again.';
+  }
+  if (clean.includes('foreign key') || clean.includes('not found')) {
+    return 'Selected product variant or customer could not be found. Please refresh the page.';
+  }
+  if (clean.includes('cannot be edited') || clean.includes('existing return')) {
+    return 'This invoice has processed customer returns and cannot be edited directly.';
+  }
+  if (clean.includes('voided') || clean.includes('is_voided')) {
+    return 'This invoice is voided. You must undo the void before making changes.';
+  }
+
+  return errorMsg;
+}
+
   const handleCheckoutOrUpdate = async () => {
     if (isSubmittingRef.current || loading || cart.length === 0) return;
 
@@ -807,17 +839,23 @@ function POSContent() {
       setLoading(true);
       setStatus(null);
 
+      const supabase = createClient();
+
       // 1. Resolve Customer if name OR phone is provided
       let finalCustomerId = resolvedCustomerId;
       if (customerName.trim() || customerPhone.trim()) {
-        const custRes = await getOrCreateCustomerAction(customerName, customerPhone);
-        if (!custRes.success || !custRes.customer) {
-          setStatus({ type: 'error', msg: custRes.error || 'Failed to save customer' });
+        const { data: custData, error: custErr } = await supabase.rpc('get_or_create_customer', {
+          p_name: customerName.trim() || null,
+          p_phone: customerPhone.trim() || null
+        });
+
+        if (custErr || !custData || !custData.customer) {
+          setStatus({ type: 'error', msg: formatHumanReadableError(custErr?.message || 'Failed to save customer') });
           setLoading(false);
           isSubmittingRef.current = false;
           return;
         }
-        finalCustomerId = custRes.customer.id;
+        finalCustomerId = custData.customer.id;
         setResolvedCustomerId(finalCustomerId);
       }
 
@@ -912,29 +950,34 @@ function POSContent() {
       }
 
       if (editInvoiceId) {
-        // EXECUTE FULL INVOICE UPDATE
-        const res = await updateFullInvoiceAction({
-          invoice_id: editInvoiceId,
-          customer_id: finalCustomerId || null,
-          subtotal,
-          discount_amount: discountAmount,
-          round_off: roundOffAmount,
-          gst_applied: gstApplied,
-          cgst_amount: cgstAmount,
-          sgst_amount: sgstAmount,
-          final_total: finalTotal,
-          items: validCart.map(i => ({
+        // EXECUTE FULL INVOICE UPDATE DIRECTLY VIA CLIENT
+        const { data: editData, error: editErr } = await supabase.rpc('update_full_invoice', {
+          p_invoice_id: editInvoiceId,
+          p_customer_id: finalCustomerId || null,
+          p_created_at: isoTimestamp,
+          p_subtotal: round2(subtotal),
+          p_discount_amount: round2(discountAmount),
+          p_round_off: round2(roundOffAmount),
+          p_gst_applied: gstApplied,
+          p_cgst_amount: round2(cgstAmount),
+          p_sgst_amount: round2(sgstAmount),
+          p_final_total: round2(finalTotal),
+          p_items: validCart.map(i => ({
             variant_id: i.variant_id,
             sets_quantity: i.sets_quantity,
             loose_quantity: i.loose_quantity,
-            selling_price_snapshot: i.price
+            selling_price: round2(i.price)
           })),
-          payments,
-          created_at: isoTimestamp
+          p_payments: payments.map(p => ({
+            amount: round2(p.amount),
+            method: p.method
+          }))
         });
 
-        if (!res?.success) {
-          setStatus({ type: 'error', msg: res?.error || 'Failed to update invoice' });
+        if (editErr) {
+          setStatus({ type: 'error', msg: formatHumanReadableError(editErr.message) });
+        } else if (!editData || !editData.invoice_id) {
+          setStatus({ type: 'error', msg: 'Failed to update invoice in database.' });
         } else {
           const totalPaidAmt = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
           const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
@@ -959,28 +1002,33 @@ function POSContent() {
           resetFormState();
         }
       } else {
-        // EXECUTE NEW CHECKOUT
-        const res = await processCheckoutAction({
-          customer_id: finalCustomerId || null,
-          subtotal,
-          discount_amount: discountAmount,
-          round_off: roundOffAmount,
-          gst_applied: gstApplied,
-          cgst_amount: cgstAmount,
-          sgst_amount: sgstAmount,
-          final_total: finalTotal,
-          items: validCart.map(i => ({
+        // EXECUTE NEW CHECKOUT DIRECTLY VIA CLIENT
+        const { data: checkData, error: checkErr } = await supabase.rpc('process_checkout', {
+          p_customer_id: finalCustomerId || null,
+          p_subtotal: round2(subtotal),
+          p_discount_amount: round2(discountAmount),
+          p_round_off: round2(roundOffAmount),
+          p_gst_applied: gstApplied,
+          p_cgst_amount: round2(cgstAmount),
+          p_sgst_amount: round2(sgstAmount),
+          p_final_total: round2(finalTotal),
+          p_items: validCart.map(i => ({
             variant_id: i.variant_id,
             sets_quantity: i.sets_quantity,
             loose_quantity: i.loose_quantity,
-            selling_price_snapshot: i.price
+            selling_price: round2(i.price)
           })),
-          payments,
-          created_at: isoTimestamp
+          p_payments: payments.map(p => ({
+            amount: round2(p.amount),
+            method: p.method
+          })),
+          p_created_at: isoTimestamp
         });
 
-        if (!res?.success) {
-          setStatus({ type: 'error', msg: res?.error || 'Checkout failed' });
+        if (checkErr) {
+          setStatus({ type: 'error', msg: formatHumanReadableError(checkErr.message) });
+        } else if (!checkData || !checkData.invoice_id) {
+          setStatus({ type: 'error', msg: 'Failed to create invoice in database.' });
         } else {
           const totalPaidAmt = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
           const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
@@ -991,23 +1039,23 @@ function POSContent() {
             paidAmount: totalPaidAmt,
             dueAmount: pendingDueAmt,
             itemCount: validCart.length,
-            invoiceNumber: res?.data?.invoice_number,
-            invoiceId: res?.data?.invoice_id
+            invoiceNumber: checkData.invoice_number,
+            invoiceId: checkData.invoice_id
           });
 
           setIsMobileCheckoutOpen(false);
           setStatus({ 
             type: 'success', 
-            msg: `Invoice ${res?.data?.invoice_number || ''} generated successfully!`,
-            invoiceId: res?.data?.invoice_id,
-            invoiceNumber: res?.data?.invoice_number
+            msg: `Invoice ${checkData.invoice_number} generated successfully!`,
+            invoiceId: checkData.invoice_id,
+            invoiceNumber: checkData.invoice_number
           });
           resetFormState();
         }
       }
     } catch (err: any) {
       const rawMsg = String(err?.message || '');
-      setStatus({ type: 'error', msg: rawMsg || 'An unexpected error occurred during checkout' });
+      setStatus({ type: 'error', msg: formatHumanReadableError(rawMsg || 'An unexpected error occurred during checkout') });
     } finally {
       setLoading(false);
       isSubmittingRef.current = false;
