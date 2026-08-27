@@ -1006,7 +1006,15 @@ function POSContent() {
         }
       }
     } catch (err: any) {
-      setStatus({ type: 'error', msg: err.message || 'An unexpected error occurred' });
+      const rawMsg = String(err?.message || '');
+      if (rawMsg.includes('Server Components render') || rawMsg.includes('digest') || rawMsg.includes('Minified React error')) {
+        setStatus({ 
+          type: 'error', 
+          msg: 'Your login session has expired or a network interruption occurred. Please log out and sign in again.' 
+        });
+      } else {
+        setStatus({ type: 'error', msg: rawMsg || 'An unexpected error occurred during checkout' });
+      }
     } finally {
       setLoading(false);
       isSubmittingRef.current = false;

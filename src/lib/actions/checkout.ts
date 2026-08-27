@@ -95,6 +95,37 @@ export const checkoutSchema = baseCheckoutObjectSchema.superRefine(refineCheckou
 
 export type CheckoutInput = z.input<typeof checkoutSchema>;
 
+function formatHumanReadableError(errorMsg: string): string {
+  const clean = errorMsg.toLowerCase();
+  
+  if (clean.includes('unauthorized') || clean.includes('jwt') || clean.includes('auth.uid')) {
+    return 'Your login session has expired. Please log out and sign in again.';
+  }
+  if (clean.includes('insufficient stock') || clean.includes('packaged sets')) {
+    return 'One or more items in the cart exceed available inventory on hand.';
+  }
+  if (clean.includes('store credit') || clean.includes('wallet')) {
+    return `Store credit error: ${errorMsg}`;
+  }
+  if (clean.includes('customer is required') || clean.includes('walk-in')) {
+    return 'A customer must be linked to complete a credit or partial-payment sale.';
+  }
+  if (clean.includes('duplicate key') || clean.includes('unique constraint')) {
+    return 'A record with this number already exists. Please try again.';
+  }
+  if (clean.includes('foreign key') || clean.includes('not found')) {
+    return 'Selected product variant or customer could not be found. Please refresh the page.';
+  }
+  if (clean.includes('cannot be edited') || clean.includes('existing return')) {
+    return 'This invoice has processed customer returns and cannot be edited directly.';
+  }
+  if (clean.includes('voided') || clean.includes('is_voided')) {
+    return 'This invoice is voided. You must undo the void before making changes.';
+  }
+
+  return errorMsg;
+}
+
 export async function processCheckoutAction(payload: unknown) {
   try {
     const parsed = checkoutSchema.safeParse(payload);
@@ -104,6 +135,14 @@ export async function processCheckoutAction(payload: unknown) {
     }
 
     const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { 
+        success: false, 
+        error: 'Your login session has expired. Please log out and sign in again.' 
+      };
+    }
+
     const { data, error } = await supabase.rpc('process_checkout', {
       p_customer_id: parsed.data.customer_id,
       p_subtotal: round2(parsed.data.subtotal),
@@ -127,20 +166,22 @@ export async function processCheckoutAction(payload: unknown) {
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: formatHumanReadableError(error.message) };
     }
 
-    revalidatePath('/pos');
-    revalidatePath('/inventory');
-    revalidatePath('/invoices');
-    revalidatePath('/customers');
-    revalidatePath('/reports');
-    revalidatePath('/dashboard');
-    revalidatePath('/');
+    try {
+      revalidatePath('/pos');
+      revalidatePath('/inventory');
+      revalidatePath('/invoices');
+      revalidatePath('/customers');
+      revalidatePath('/reports');
+      revalidatePath('/dashboard');
+      revalidatePath('/');
+    } catch {}
 
     return { success: true, data };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'An unexpected error occurred during checkout' };
+    return { success: false, error: formatHumanReadableError(err?.message || 'An unexpected error occurred during checkout') };
   }
 }
 
@@ -159,6 +200,14 @@ export async function updateFullInvoiceAction(payload: unknown) {
     }
 
     const supabase = createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { 
+        success: false, 
+        error: 'Your login session has expired. Please log out and sign in again.' 
+      };
+    }
+
     const { data, error } = await supabase.rpc('update_full_invoice', {
       p_invoice_id: parsed.data.invoice_id,
       p_customer_id: parsed.data.customer_id,
@@ -183,19 +232,21 @@ export async function updateFullInvoiceAction(payload: unknown) {
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: formatHumanReadableError(error.message) };
     }
 
-    revalidatePath('/invoices');
-    revalidatePath('/pos');
-    revalidatePath('/inventory');
-    revalidatePath('/reports');
-    revalidatePath('/customers');
-    revalidatePath('/dashboard');
-    revalidatePath('/');
+    try {
+      revalidatePath('/invoices');
+      revalidatePath('/pos');
+      revalidatePath('/inventory');
+      revalidatePath('/reports');
+      revalidatePath('/customers');
+      revalidatePath('/dashboard');
+      revalidatePath('/');
+    } catch {}
 
     return { success: true, data };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'An unexpected error occurred while updating invoice' };
+    return { success: false, error: formatHumanReadableError(err?.message || 'An unexpected error occurred while updating invoice') };
   }
 }
