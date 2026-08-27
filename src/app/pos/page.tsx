@@ -42,6 +42,8 @@ import {
   DEFAULT_WHATSAPP_INVOICE_TEMPLATE 
 } from '@/lib/whatsapp';
 import { WhatsAppPromptModal } from '@/components/whatsapp/WhatsAppPromptModal';
+import ProductVariantSelectModal, { GroupedProductResult, GroupedProductVariant } from '@/components/pos/ProductVariantSelectModal';
+import { formatINR, formatDualQuantity } from '@/lib/formatters';
 import toast from 'react-hot-toast';
 
 interface CartItem {
@@ -190,6 +192,63 @@ function POSContent() {
 
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [selectedProductGroup, setSelectedProductGroup] = useState<GroupedProductResult | null>(null);
+
+  // Group variant search results by Product for clean POS item picker
+  const groupedSearchResults = useMemo<GroupedProductResult[]>(() => {
+    if (!searchResults || searchResults.length === 0) return [];
+
+    const groupMap = new Map<string, GroupedProductResult>();
+
+    searchResults.forEach((v: any) => {
+      const pId = v.product_id || v.variant_id;
+      const rawName = String(v.name || '');
+      const pName = String(v.product_name || (rawName.includes(' - ') ? rawName.split(' - ')[0] : rawName));
+      const piecesPerSet = Math.max(1, Number(v.pieces_per_set) || 1);
+      const price = Number(v.selling_price || v.price || 0);
+
+      let varName = String(v.variant_name || rawName);
+      if (rawName.startsWith(pName + ' - ')) {
+        varName = rawName.slice((pName + ' - ').length);
+      } else if (rawName.includes(' - ')) {
+        varName = rawName.split(' - ').slice(1).join(' - ');
+      }
+
+      const variantObj: GroupedProductVariant = {
+        variant_id: v.variant_id || v.id,
+        name: rawName,
+        variant_name: varName || rawName,
+        barcode: v.barcode || '',
+        price,
+        selling_price: price,
+        stock_quantity: Number(v.stock_quantity) || 0,
+        stock_sets: Number(v.stock_sets) || 0,
+        pieces_per_set: piecesPerSet
+      };
+
+      if (!groupMap.has(pId)) {
+        groupMap.set(pId, {
+          product_id: pId,
+          product_name: pName,
+          pieces_per_set: piecesPerSet,
+          min_price: price,
+          max_price: price,
+          total_stock_quantity: variantObj.stock_quantity,
+          total_stock_sets: variantObj.stock_sets,
+          variants: [variantObj]
+        });
+      } else {
+        const existing = groupMap.get(pId)!;
+        existing.variants.push(variantObj);
+        existing.min_price = Math.min(existing.min_price, price);
+        existing.max_price = Math.max(existing.max_price, price);
+        existing.total_stock_quantity += variantObj.stock_quantity;
+        existing.total_stock_sets += variantObj.stock_sets;
+      }
+    });
+
+    return Array.from(groupMap.values());
+  }, [searchResults]);
 
   // Load existing invoice for full editing if editInvoiceIdParam is present
   useEffect(() => {
@@ -534,7 +593,7 @@ function POSContent() {
       }
       return [...prev, {
         variant_id: variant.variant_id,
-        name: variant.product_name ? `${variant.product_name} - ${variant.name}` : (variant.name || 'Item'),
+        name: variant.product_name ? `${variant.product_name} - ${variant.variant_name || variant.name}` : (variant.name || 'Item'),
         price: Number(variant.selling_price || variant.price || 0),
         pieces_per_set: variant.pieces_per_set || 1,
         sets_quantity: variant.stock_sets && variant.stock_sets > 0 ? 1 : 0,
@@ -543,6 +602,52 @@ function POSContent() {
         stock_sets: variant.stock_sets
       }];
     });
+  };
+
+  const handleBatchAddVariantsToCart = (
+    productGroup: GroupedProductResult,
+    itemsToAdd: Array<{ variant: GroupedProductVariant; sets: number; loose: number }>
+  ) => {
+    setSearchResults([]);
+    setIsSearching(false);
+    setSearchQuery('');
+    setSelectedProductGroup(null);
+
+    setCart(prev => {
+      let nextCart = [...prev];
+
+      itemsToAdd.forEach(({ variant, sets, loose }) => {
+        if (sets <= 0 && loose <= 0) return;
+
+        const existingIndex = nextCart.findIndex(i => i.variant_id === variant.variant_id);
+        const fullName = `${productGroup.product_name} - ${variant.variant_name}`;
+
+        if (existingIndex >= 0) {
+          const existing = nextCart[existingIndex];
+          nextCart[existingIndex] = {
+            ...existing,
+            sets_quantity: existing.sets_quantity + sets,
+            loose_quantity: existing.loose_quantity + loose
+          };
+        } else {
+          nextCart.push({
+            variant_id: variant.variant_id,
+            name: fullName,
+            price: Number(variant.selling_price || variant.price || 0),
+            pieces_per_set: variant.pieces_per_set || productGroup.pieces_per_set || 1,
+            sets_quantity: sets,
+            loose_quantity: loose,
+            stock_quantity: variant.stock_quantity,
+            stock_sets: variant.stock_sets
+          });
+        }
+      });
+
+      return nextCart;
+    });
+
+    setSplitSaved(false);
+    toast.success(`Added ${productGroup.product_name} items to cart`);
   };
 
   const handleRemoveItem = (variantId: string) => {
@@ -965,32 +1070,50 @@ function POSContent() {
                   Searching...
                 </div>
               )}
-              {/* Live Search Dropdown */}
-              {searchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-surface border border-border rounded-[12px] shadow-lg max-h-72 overflow-y-auto z-50 divide-y divide-border">
-                  {searchResults.map(v => (
-                    <div 
-                      key={v.variant_id}
-                      onClick={() => handleAddToCart(v)}
-                      className="p-3 hover:bg-row-alt cursor-pointer flex justify-between items-center transition-colors"
-                    >
-                      <div>
-                        <div className="font-bold text-[14px] text-ink-primary flex items-center gap-1.5">
-                          {v.name}
-                          {Number(v.stock_quantity || 0) <= 0 && (
-                            <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
-                              Out of Stock
-                            </span>
-                          )}
+              {/* Live Grouped Product Search Dropdown */}
+              {groupedSearchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-surface border border-border rounded-[14px] shadow-xl max-h-80 overflow-y-auto z-50 divide-y divide-border">
+                  {groupedSearchResults.map(group => {
+                    const isOutOfStock = group.total_stock_quantity <= 0;
+                    const priceRange = group.min_price === group.max_price
+                      ? formatINR(group.min_price)
+                      : `${formatINR(group.min_price)} – ${formatINR(group.max_price)}`;
+
+                    return (
+                      <div 
+                        key={group.product_id}
+                        onClick={() => {
+                          setSelectedProductGroup(group);
+                        }}
+                        className="p-3.5 hover:bg-row-alt cursor-pointer flex justify-between items-center transition-colors group"
+                      >
+                        <div className="min-w-0 flex-1 pr-3">
+                          <div className="font-bold text-[14px] sm:text-[15px] text-ink-primary flex items-center gap-2 flex-wrap">
+                            <span className="truncate">{group.product_name}</span>
+                            {isOutOfStock && (
+                              <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/40 px-1.5 py-0.5 rounded">
+                                Out of Stock
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[12px] text-ink-muted flex items-center gap-2 mt-0.5">
+                            <span className="font-semibold text-accent">{group.variants.length} variant{group.variants.length !== 1 ? 's' : ''}</span>
+                            <span>•</span>
+                            <span>{group.pieces_per_set} pcs/set</span>
+                          </div>
                         </div>
-                        <div className="text-[12px] text-ink-muted">Barcode: {v.barcode || 'N/A'} • {v.pieces_per_set} pcs/set</div>
+
+                        <div className="text-right shrink-0">
+                          <div className="font-bold font-mono text-[14px] sm:text-[15px] text-accent">
+                            {priceRange}
+                          </div>
+                          <div className="text-[11px] font-mono text-ink-muted mt-0.5">
+                            {formatDualQuantity(group.total_stock_quantity, group.pieces_per_set)}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-[14px] text-accent">₹{v.price.toFixed(2)}</div>
-                        <div className="text-[11px] text-gray-500">{v.stock_sets} sets / {v.stock_quantity} pcs</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1864,6 +1987,14 @@ function POSContent() {
           </div>
         </div>
       )}
+
+      {/* Product Variant Selection Modal */}
+      <ProductVariantSelectModal
+        isOpen={Boolean(selectedProductGroup)}
+        onClose={() => setSelectedProductGroup(null)}
+        productGroup={selectedProductGroup}
+        onAddItems={handleBatchAddVariantsToCart}
+      />
 
       {/* WhatsApp Prompt Modal */}
       <WhatsAppPromptModal
