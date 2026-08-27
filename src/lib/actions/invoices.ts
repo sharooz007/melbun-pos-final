@@ -24,7 +24,7 @@ const permanentlyDeleteInvoiceSchema = z.object({
 
 const updateInvoiceDetailsSchema = z.object({
   invoice_id: z.string().uuid('Invalid invoice ID format'),
-  created_at: z.string().datetime({ offset: true, message: 'Invalid datetime format' }).optional(),
+  created_at: z.string().datetime({ offset: true, message: 'Invalid datetime format' }).optional().nullable(),
   customer_id: z.string().uuid('Invalid customer ID format').nullable().optional()
 });
 

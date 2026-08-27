@@ -2,7 +2,7 @@
 
 -- 1. Returns Table Definition
 CREATE TABLE returns (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
     invoice_item_id UUID NOT NULL REFERENCES invoice_items(id) ON DELETE RESTRICT,
     variant_id UUID NOT NULL REFERENCES variants(id) ON DELETE RESTRICT,

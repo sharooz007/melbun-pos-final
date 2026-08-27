@@ -18,7 +18,7 @@ const paymentItemSchema = z.object({
   method: z.enum(['CASH', 'UPI', 'STORE_CREDIT'])
 });
 
-const checkoutSchema = z.object({
+const baseCheckoutObjectSchema = z.object({
   customer_id: z
     .preprocess((val) => (val === '' || val === undefined ? null : val), z.string().uuid().nullable().optional())
     .default(null),
@@ -32,7 +32,9 @@ const checkoutSchema = z.object({
   items: z.array(checkoutItemSchema).min(1, 'Cart cannot be empty'),
   payments: z.array(paymentItemSchema).default([]),
   created_at: z.string().datetime({ offset: true }).optional().nullable()
-}).superRefine((data, ctx) => {
+});
+
+const refineCheckoutData = (data: z.infer<typeof baseCheckoutObjectSchema>, ctx: z.RefinementCtx) => {
   // 1. Prevent discount > subtotal
   if (data.discount_amount > data.subtotal) {
     ctx.addIssue({
@@ -87,7 +89,9 @@ const checkoutSchema = z.object({
       path: ['customer_id']
     });
   }
-});
+};
+
+export const checkoutSchema = baseCheckoutObjectSchema.superRefine(refineCheckoutData);
 
 export type CheckoutInput = z.input<typeof checkoutSchema>;
 
@@ -131,6 +135,7 @@ export async function processCheckoutAction(payload: unknown) {
     revalidatePath('/invoices');
     revalidatePath('/customers');
     revalidatePath('/reports');
+    revalidatePath('/dashboard');
     revalidatePath('/');
 
     return { success: true, data };
@@ -139,9 +144,9 @@ export async function processCheckoutAction(payload: unknown) {
   }
 }
 
-const updateFullInvoiceSchema = checkoutSchema.extend({
+const updateFullInvoiceSchema = baseCheckoutObjectSchema.extend({
   invoice_id: z.string().uuid('Invalid invoice ID')
-});
+}).superRefine(refineCheckoutData);
 
 export type UpdateFullInvoiceInput = z.input<typeof updateFullInvoiceSchema>;
 
@@ -186,6 +191,7 @@ export async function updateFullInvoiceAction(payload: unknown) {
     revalidatePath('/inventory');
     revalidatePath('/reports');
     revalidatePath('/customers');
+    revalidatePath('/dashboard');
     revalidatePath('/');
 
     return { success: true, data };

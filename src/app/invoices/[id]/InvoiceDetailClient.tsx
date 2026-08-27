@@ -385,13 +385,24 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
         <div className="flex items-center gap-2 flex-wrap">
           {!invoice.is_voided && (
             <>
-              <Link
-                href={`/pos?edit_invoice_id=${invoice.id}`}
-                className="px-3.5 py-2 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
-              >
-                <Edit3 className="w-4 h-4" />
-                <span>Edit Invoice</span>
-              </Link>
+              {profitMetrics.totalRefunds > 0 ? (
+                <button
+                  disabled
+                  className="px-3.5 py-2 bg-gray-100 text-gray-400 border border-gray-200 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs cursor-not-allowed"
+                  title="Editing locked: Returns exist for this invoice"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Edit Invoice</span>
+                </button>
+              ) : (
+                <Link
+                  href={`/pos?editInvoiceId=${invoice.id}`}
+                  className="px-3.5 py-2 bg-accent hover:bg-accent-hover text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Edit Invoice</span>
+                </Link>
+              )}
               <Link
                 href={`/returns?invoice_number=${encodeURIComponent(invoice.invoice_number)}`}
                 className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"

@@ -16,7 +16,7 @@ EXCEPTION
 END $$;
 
 CREATE TABLE IF NOT EXISTS customer_credit_ledger (
-    id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE RESTRICT,
     type credit_movement_type NOT NULL,
     amount DECIMAL(10,2) NOT NULL,

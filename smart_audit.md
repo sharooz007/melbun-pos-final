@@ -336,3 +336,24 @@
 3. **`POS-DATE-01` (Backdated Checkout from POS Sidebar)**:
    - Files: [`supabase/migrations/0058_full_invoice_edit_rpc.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0058_full_invoice_edit_rpc.sql), [`src/lib/actions/checkout.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/checkout.ts), [`src/app/pos/page.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/pos/page.tsx)
    - Resolution: Upgraded `process_checkout` with `p_created_at TIMESTAMPTZ DEFAULT NULL` and added "Invoice Date & Time" selector directly inside the POS checkout panel, enabling cashiers to bill backdated invoices on the fly.
+
+---
+
+## 🛡️ Cycle 10: Adversarial Audit & Zod Inheritance Hardening — ALL RESOLVED & VERIFIED ✅
+
+1. **`ZOD-CRIT-01` (Zod Schema Inheritance Runtime Crash on Full Invoice Edit)**:
+   - File: [`src/lib/actions/checkout.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/checkout.ts)
+   - Resolution: Separated `baseCheckoutObjectSchema` from `.superRefine(refineCheckoutData)`, allowing `updateFullInvoiceSchema` to extend the base object cleanly with `invoice_id: z.string().uuid()` and attach the shared refinement function, eliminating runtime `TypeError: checkoutSchema.extend is not a function`.
+2. **`INV-NULL-01` (Invoice Details Date Nullability)**:
+   - File: [`src/lib/actions/invoices.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/invoices.ts)
+   - Resolution: Added `.nullable()` to `updateInvoiceDetailsSchema.created_at`, permitting `{ created_at: null }` payloads without validation rejection.
+3. **`DASH-SYNC-01` (Dashboard Cache Invalidation on Invoice Mutations)**:
+   - File: [`src/lib/actions/checkout.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/checkout.ts)
+   - Resolution: Added `revalidatePath('/dashboard')` to both `processCheckoutAction` and `updateFullInvoiceAction`.
+4. **`UI-RET-LOCK-01` (Proactive Edit Lock for Invoices with Processed Returns)**:
+   - Files: [`src/app/invoices/InvoicesClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/invoices/InvoicesClient.tsx), [`src/app/invoices/[id]/InvoiceDetailClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/invoices/%5Bid%5D/InvoiceDetailClient.tsx)
+   - Resolution: Disabled Edit button when `total_refunds > 0` or returns exist with informative tooltip `"Editing locked: Returns exist for this invoice"`, providing upfront cashier visual feedback before navigation.
+5. **`ROUTE-PARAM-01` (Navigation Query Parameter Normalization)**:
+   - Files: [`src/app/invoices/InvoicesClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/invoices/InvoicesClient.tsx), [`src/app/invoices/[id]/InvoiceDetailClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/invoices/%5Bid%5D/InvoiceDetailClient.tsx)
+   - Resolution: Standardized all POS edit navigation links to `/pos?editInvoiceId=${id}`.
+

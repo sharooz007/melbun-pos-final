@@ -613,13 +613,24 @@ export default function InvoicesClient({
                   </>
                 ) : (
                   <>
-                    <button
-                      onClick={() => openEditModal(inv)}
-                      className="px-3 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 min-h-[36px]"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                      Edit
-                    </button>
+                    {(inv.total_refunds || 0) > 0 ? (
+                      <button
+                        disabled
+                        className="px-3 py-2 text-xs font-semibold text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed flex items-center gap-1 min-h-[36px]"
+                        title="Editing locked: Returns exist for this invoice"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Edit
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openEditModal(inv)}
+                        className="px-3 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 min-h-[36px]"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        Edit
+                      </button>
+                    )}
                     {inv.status !== 'Refunded' && (inv.total_refunds || 0) === 0 && (
                       <button
                         onClick={() => openVoidModal(inv)}
@@ -732,13 +743,24 @@ export default function InvoicesClient({
                         </>
                       ) : (
                         <>
-                          <button
-                            onClick={() => openEditModal(inv)}
-                            className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            Edit
-                          </button>
+                          {(inv.total_refunds || 0) > 0 ? (
+                            <button
+                              disabled
+                              className="px-2.5 py-1.5 text-xs font-semibold text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed flex items-center gap-1"
+                              title="Editing locked: Returns exist for this invoice"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              Edit
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openEditModal(inv)}
+                              className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              Edit
+                            </button>
+                          )}
                           {inv.status !== 'Refunded' && (inv.total_refunds || 0) === 0 && (
                             <button
                               onClick={() => openVoidModal(inv)}
