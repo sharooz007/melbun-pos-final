@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --canvas-base: #F8FAFC;     /* slate-50 */
     --pure-surface: #FFFFFF;    /* white */
     --ink-primary: #0F172A;     /* slate-900 */
@@ -12,6 +13,18 @@
     --accent: #2563EB;          /* blue-600 */
     --accent-hover: #1D4ED8;    /* blue-700 */
     --row-alt: #F1F5F9;         /* slate-100 */
+  }
+
+  .dark, [data-theme="dark"] {
+    color-scheme: dark;
+    --canvas-base: #0B0F17;     /* slate-950 deep canvas */
+    --pure-surface: #131B2E;    /* elevated slate-900 container */
+    --ink-primary: #F8FAFC;     /* bright crisp text */
+    --ink-muted: #94A3B8;       /* slate-400 secondary text */
+    --border-default: #1E293B;  /* slate-800 subtle borders */
+    --accent: #3B82F6;          /* vibrant blue-500 */
+    --accent-hover: #60A5FA;    /* bright blue-400 */
+    --row-alt: #182234;         /* slate-800/60 row hover/alt */
   }
 
   /* Prevent iOS Safari from auto-zooming on focus when font size < 16px */

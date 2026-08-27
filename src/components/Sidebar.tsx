@@ -7,17 +7,20 @@ import {
   LayoutDashboard, 
   ShoppingCart, 
   Package, 
-  Users,
+  Users, 
   TrendingDown, 
   BarChart3, 
   Printer, 
   Settings, 
   ScanBarcode, 
-  Receipt,
-  FileText,
-  Menu,
-  X
+  Receipt, 
+  FileText, 
+  Menu, 
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
+import { useTheme } from '@/components/theme/ThemeProvider';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -38,21 +41,37 @@ const mobileNavItems = navItems.slice(0, 4);
 export default function Sidebar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { resolvedTheme, toggleTheme } = useTheme();
+
   useEffect(() => {
     const handler = () => setIsMobileMenuOpen(prev => !prev);
     window.addEventListener('toggle-mobile-menu', handler);
     return () => window.removeEventListener('toggle-mobile-menu', handler);
   }, []);
 
-
   if (pathname === '/login') return null;
 
   return (
     <>
-      <aside className="fixed bottom-0 left-0 right-0 z-[100] bg-ink-primary border-t border-white/10 md:relative md:w-[240px] md:flex md:flex-col md:h-[100dvh] md:border-r md:border-t-0 shrink-0 pb-safe">
-        <div className="hidden md:flex p-6 items-center gap-3">
-          <div className="w-8 h-8 bg-accent rounded-[8px] flex items-center justify-center font-bold text-white shadow-sm">M</div>
-          <span className="text-white font-bold tracking-tight text-[18px]">Melbon POS</span>
+      <aside className="fixed bottom-0 left-0 right-0 z-[100] bg-surface border-t border-border md:relative md:w-[240px] md:flex md:flex-col md:h-[100dvh] md:border-r md:border-t-0 shrink-0 pb-safe transition-colors duration-200">
+        <div className="hidden md:flex p-6 items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-accent rounded-[8px] flex items-center justify-center font-bold text-white shadow-sm">M</div>
+            <span className="text-ink-primary font-bold tracking-tight text-[18px]">Melbun POS</span>
+          </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle theme"
+            className="p-1.5 rounded-lg bg-row-alt hover:bg-border text-ink-muted hover:text-ink-primary transition cursor-pointer"
+          >
+            {resolvedTheme === 'dark' ? (
+              <Sun className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Moon className="w-4 h-4 text-slate-600" />
+            )}
+          </button>
         </div>
         
         {/* DESKTOP: Full Navigation List */}
@@ -65,13 +84,13 @@ export default function Sidebar() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-[8px] text-[14px] font-medium transition-colors shrink-0 ${
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-[10px] text-[14px] font-medium transition-colors shrink-0 ${
                   isActive 
-                    ? 'bg-accent/20 text-accent font-bold' 
-                    : 'text-white/60 hover:bg-white/5 hover:text-white'
+                    ? 'bg-accent/15 text-accent font-bold' 
+                    : 'text-ink-muted hover:bg-row-alt hover:text-ink-primary'
                 }`}
               >
-                <item.icon className={`w-[18px] h-[18px] ${isActive ? 'text-accent' : ''}`} />
+                <item.icon className={`w-[18px] h-[18px] ${isActive ? 'text-accent' : 'text-ink-muted'}`} />
                 <span className="whitespace-nowrap">{item.name}</span>
               </Link>
             );
@@ -92,42 +111,59 @@ export default function Sidebar() {
                 className={`flex flex-col items-center gap-1 p-2 rounded-[8px] text-[10px] font-medium transition-colors flex-1 ${
                   isActive && !isMobileMenuOpen
                     ? 'text-accent font-bold' 
-                    : 'text-white/60 hover:bg-white/5 hover:text-white'
+                    : 'text-ink-muted hover:bg-row-alt hover:text-ink-primary'
                 }`}
               >
-                <item.icon className={`w-[22px] h-[22px] ${isActive && !isMobileMenuOpen ? 'text-accent' : ''}`} />
+                <item.icon className={`w-[22px] h-[22px] ${isActive && !isMobileMenuOpen ? 'text-accent' : 'text-ink-muted'}`} />
                 <span className="whitespace-nowrap">{item.name}</span>
               </Link>
             );
           })}
         </nav>
         
-        <div className="hidden md:block p-4 border-t border-white/10">
+        <div className="hidden md:block p-4 border-t border-border">
           <Link 
             href="/settings" 
-            className={`flex items-center gap-3 px-4 py-2 rounded-[8px] cursor-pointer transition-colors group ${
+            className={`flex items-center gap-3 px-4 py-2 rounded-[10px] cursor-pointer transition-colors group ${
               pathname.startsWith('/settings')
-                ? 'bg-accent/20 text-accent font-bold'
-                : 'text-white/60 hover:bg-white/5 hover:text-white'
+                ? 'bg-accent/15 text-accent font-bold'
+                : 'text-ink-muted hover:bg-row-alt hover:text-ink-primary'
             }`}
           >
-            <Settings className={`w-[18px] h-[18px] ${pathname.startsWith('/settings') ? 'text-accent' : 'text-white/60 group-hover:text-white'}`} />
-            <span className={`text-[14px] font-medium ${pathname.startsWith('/settings') ? 'text-accent' : 'text-white/60 group-hover:text-white'}`}>Settings</span>
+            <Settings className={`w-[18px] h-[18px] ${pathname.startsWith('/settings') ? 'text-accent' : 'text-ink-muted group-hover:text-ink-primary'}`} />
+            <span className={`text-[14px] font-medium ${pathname.startsWith('/settings') ? 'text-accent' : 'text-ink-muted group-hover:text-ink-primary'}`}>Settings</span>
           </Link>
         </div>
       </aside>
 
       {/* MOBILE: Full Screen Menu Drawer */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-[90] bg-ink-primary flex flex-col animate-in fade-in zoom-in-95 duration-200 pb-[80px]">
-          <div className="p-6 flex items-center justify-between border-b border-white/10">
+        <div className="md:hidden fixed inset-0 z-[90] bg-surface flex flex-col animate-in fade-in zoom-in-95 duration-200 pb-[80px]">
+          <div className="p-6 flex items-center justify-between border-b border-border">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-accent rounded-[8px] flex items-center justify-center font-bold text-white shadow-sm">M</div>
-              <span className="text-white font-bold tracking-tight text-[18px]">Melbon POS</span>
+              <span className="text-ink-primary font-bold tracking-tight text-[18px]">Melbun POS</span>
             </div>
-            <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-white/60 hover:text-white bg-white/5 rounded-full">
-              <X className="w-6 h-6" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label="Toggle theme"
+                className="p-2 rounded-full bg-row-alt text-ink-primary border border-border"
+              >
+                {resolvedTheme === 'dark' ? (
+                  <Sun className="w-5 h-5 text-amber-400" />
+                ) : (
+                  <Moon className="w-5 h-5 text-slate-600" />
+                )}
+              </button>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)} 
+                className="p-2 text-ink-muted hover:text-ink-primary bg-row-alt rounded-full border border-border"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
             {navItems.map((item) => {
@@ -139,13 +175,13 @@ export default function Sidebar() {
                   key={item.name}
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center gap-4 px-4 py-4 rounded-[12px] text-[16px] font-medium transition-colors ${
+                  className={`flex items-center gap-4 px-4 py-3.5 rounded-[12px] text-[16px] font-medium transition-colors ${
                     isActive 
-                      ? 'bg-accent/20 text-accent font-bold' 
-                      : 'text-white/80 bg-white/5 hover:bg-white/10'
+                      ? 'bg-accent/15 text-accent font-bold' 
+                      : 'text-ink-primary bg-row-alt hover:bg-border/80'
                   }`}
                 >
-                  <item.icon className={`w-6 h-6 ${isActive ? 'text-accent' : 'text-white/60'}`} />
+                  <item.icon className={`w-5 h-5 ${isActive ? 'text-accent' : 'text-ink-muted'}`} />
                   {item.name}
                 </Link>
               );
@@ -153,13 +189,13 @@ export default function Sidebar() {
             <Link 
               href="/settings"
               onClick={() => setIsMobileMenuOpen(false)}
-              className={`flex items-center gap-4 px-4 py-4 rounded-[12px] text-[16px] font-medium transition-colors mt-4 ${
+              className={`flex items-center gap-4 px-4 py-3.5 rounded-[12px] text-[16px] font-medium transition-colors mt-4 ${
                 pathname.startsWith('/settings')
-                  ? 'bg-accent/20 text-accent font-bold'
-                  : 'text-white/80 bg-white/5 hover:bg-white/10'
+                  ? 'bg-accent/15 text-accent font-bold'
+                  : 'text-ink-primary bg-row-alt hover:bg-border/80'
               }`}
             >
-              <Settings className={`w-6 h-6 ${pathname.startsWith('/settings') ? 'text-accent' : 'text-white/60'}`} />
+              <Settings className={`w-5 h-5 ${pathname.startsWith('/settings') ? 'text-accent' : 'text-ink-muted'}`} />
               Settings
             </Link>
           </div>

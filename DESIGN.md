@@ -1,4 +1,4 @@
-# Design System: Melbon POS
+# Design System: Melbun POS
 
 ## 1. Visual Theme & Atmosphere
 A crisp, high-contrast, professional Point of Sale (POS) interface. The atmosphere is sharp, sterile in a good way, and incredibly focused—inspired by the premium hardware-accelerated feel of Square POS and Shopify POS. It rejects generic warm/beige aesthetics ("AI slop") in favor of an ultra-clean Slate and White palette that maximizes legibility in bright retail environments.

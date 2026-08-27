@@ -156,7 +156,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
     const message = formatWhatsAppMessage(template, {
       customer_name: invoice.customers?.name,
       customer_phone: invoice.customers?.phone,
-      store_name: storeSettings?.store_name || 'Melbon Wholesale',
+      store_name: storeSettings?.store_name || 'Melbun Wholesale',
       store_phone: storeSettings?.phone || '',
       store_address: storeSettings?.address || '',
       invoice_number: invoice.invoice_number,
@@ -191,7 +191,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
     const message = formatWhatsAppMessage(template, {
       customer_name: invoice.customers?.name,
       customer_phone: invoice.customers?.phone,
-      store_name: storeSettings?.store_name || 'Melbon Wholesale',
+      store_name: storeSettings?.store_name || 'Melbun Wholesale',
       store_phone: storeSettings?.phone || '',
       store_address: storeSettings?.address || '',
       invoice_number: invoice.invoice_number,

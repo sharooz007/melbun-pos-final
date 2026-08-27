@@ -29,7 +29,10 @@ import {
   MessageSquare,
   Send,
   RefreshCw,
-  Sliders
+  Sliders,
+  Sun,
+  Moon,
+  Laptop
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -40,6 +43,7 @@ import {
   DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE, 
   formatWhatsAppMessage 
 } from '@/lib/whatsapp';
+import { useTheme } from '@/components/theme/ThemeProvider';
 import toast from 'react-hot-toast';
 
 const HOURS = [
@@ -71,12 +75,13 @@ const HOURS = [
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
   // Form State
-  const [storeName, setStoreName] = useState('Melbon Wholesale');
+  const [storeName, setStoreName] = useState('Melbun Wholesale');
   const [tagline, setTagline] = useState('Premium Wholesale & Retail POS');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
@@ -302,6 +307,59 @@ export default function SettingsPage() {
           {/* LEFT COLUMN: Configuration Forms (7 cols on desktop) */}
           <div className="lg:col-span-7 space-y-6">
             
+            {/* Card 0: Appearance & Theme */}
+            <div className="bg-surface p-5 sm:p-6 rounded-2xl border border-border shadow-xs space-y-4">
+              <div className="flex items-center gap-3 border-b border-border pb-3.5">
+                <div className="p-2 bg-accent/10 text-accent rounded-xl">
+                  {resolvedTheme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-ink-primary">
+                    Appearance &amp; Dark Mode
+                  </h2>
+                  <p className="text-xs text-ink-muted">
+                    Customize interface color scheme for comfortable day and night operation.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 pt-1">
+                {[
+                  { id: 'light', label: 'Light', icon: Sun, desc: 'Clean high contrast' },
+                  { id: 'dark', label: 'Dark', icon: Moon, desc: 'Night shift mode' },
+                  { id: 'system', label: 'System', icon: Laptop, desc: 'Syncs with device' },
+                ].map((mode) => {
+                  const isSelected = theme === mode.id;
+                  const Icon = mode.icon;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setTheme(mode.id as 'light' | 'dark' | 'system')}
+                      className={`p-3 sm:p-4 rounded-2xl border text-left transition flex flex-col justify-between gap-2 min-h-[76px] cursor-pointer ${
+                        isSelected
+                          ? 'bg-accent/10 border-accent text-accent shadow-2xs font-bold'
+                          : 'bg-row-alt border-border text-ink-muted hover:text-ink-primary hover:bg-border/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <Icon className={`w-5 h-5 ${isSelected ? 'text-accent' : 'text-ink-muted'}`} />
+                        {isSelected && <Check className="w-4 h-4 text-accent" />}
+                      </div>
+                      <div>
+                        <div className={`text-xs font-bold ${isSelected ? 'text-accent' : 'text-ink-primary'}`}>
+                          {mode.label}
+                        </div>
+                        <div className="text-[10px] text-ink-muted hidden sm:block">
+                          {mode.desc}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Card 1: Business Day & Reporting Engine */}
             <div className="bg-surface p-5 sm:p-6 rounded-2xl border border-border shadow-xs space-y-5">
               <div className="flex items-center gap-3 border-b border-border pb-3.5">
@@ -395,7 +453,7 @@ export default function SettingsPage() {
                     required
                     value={storeName}
                     onChange={(e) => setStoreName(e.target.value)}
-                    placeholder="e.g. Melbon Wholesale"
+                    placeholder="e.g. Melbun Wholesale"
                     className="w-full px-3.5 py-2.5 bg-row-alt border border-border rounded-xl text-xs sm:text-sm font-semibold text-ink-primary focus:ring-2 focus:ring-accent focus:bg-surface outline-none transition min-h-[44px]"
                   />
                 </div>
@@ -439,7 +497,7 @@ export default function SettingsPage() {
                     inputMode="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. billing@melbonwholesale.com"
+                    placeholder="e.g. billing@melbunwholesale.com"
                     className="w-full px-3.5 py-2.5 bg-row-alt border border-border rounded-xl text-xs sm:text-sm font-semibold text-ink-primary focus:ring-2 focus:ring-accent focus:bg-surface outline-none transition min-h-[44px]"
                   />
                 </div>
@@ -696,8 +754,8 @@ export default function SettingsPage() {
                           activeTemplateTab === 'invoice' ? whatsappInvoiceTemplate : whatsappDueReminderTemplate,
                           {
                             customer_name: 'Ramesh Kumar',
-                            store_name: storeName || 'Melbon Wholesale',
-                            invoice_number: 'MELBON/2026/000142',
+                            store_name: storeName || 'Melbun Wholesale',
+                            invoice_number: 'MELBUN/2026/000142',
                             date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
                             item_count: 3,
                             total_amount: 1573.95,
@@ -722,7 +780,7 @@ export default function SettingsPage() {
                   {/* Store Header Simulation */}
                   <div className="space-y-1 border-b border-dashed border-border pb-4">
                     <h3 className="font-extrabold text-base tracking-tight text-ink-primary uppercase truncate">
-                      {storeName || 'MELBON POS'}
+                      {storeName || 'MELBUN POS'}
                     </h3>
                     {tagline && (
                       <p className="text-[11px] text-ink-muted font-sans font-medium">
@@ -748,7 +806,7 @@ export default function SettingsPage() {
                   {/* Simulated Invoice Body */}
                   <div className="space-y-2 text-[11px] text-left text-ink-muted">
                     <div className="flex justify-between border-b border-border/50 pb-1">
-                      <span>INVOICE: #MELBON-PREVIEW</span>
+                      <span>INVOICE: #MELBUN-PREVIEW</span>
                       <span>{new Date().toLocaleDateString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between text-ink-primary font-bold">
@@ -768,7 +826,7 @@ export default function SettingsPage() {
                   {/* Footer Simulation */}
                   <div className="pt-3 border-t border-dashed border-border text-[10px] text-ink-muted text-center space-y-1">
                     <p>*** THANK YOU FOR SHOPPING ***</p>
-                    <p className="text-[9px] text-ink-muted/70">Powered by Melbon Engine</p>
+                    <p className="text-[9px] text-ink-muted/70">Powered by Melbun Engine</p>
                   </div>
                 </div>
               )}

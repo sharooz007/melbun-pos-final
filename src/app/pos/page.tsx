@@ -145,7 +145,7 @@ function POSContent() {
     const message = formatWhatsAppMessage(template, {
       customer_name: cName,
       customer_phone: cPhone,
-      store_name: storeSettings?.store_name || 'Melbon Wholesale',
+      store_name: storeSettings?.store_name || 'Melbun Wholesale',
       store_phone: storeSettings?.phone || '',
       store_address: storeSettings?.address || '',
       invoice_number: invNumber,

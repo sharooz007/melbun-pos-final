@@ -112,19 +112,19 @@ export default function LookupPage() {
   };
 
   return (
-    <div className="p-3.5 pb-36 sm:p-6 md:p-8 md:pb-8 max-w-4xl w-full mx-auto space-y-8">
+    <div className="p-3.5 pb-36 sm:p-6 md:p-8 md:pb-8 max-w-4xl w-full mx-auto space-y-8 font-sans text-ink-primary">
       <header className="text-center space-y-2">
-        <div className="mx-auto w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center text-accent mb-4">
+        <div className="mx-auto w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center text-accent mb-4 shadow-2xs">
           <ScanBarcode className="w-8 h-8" />
         </div>
-        <h1 className="text-3xl font-bold text-gray-900">Price & Stock Scanner</h1>
-        <p className="text-gray-500">Scan a barcode or search by name to instantly view price and availability.</p>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink-primary tracking-tight">Price &amp; Stock Scanner</h1>
+        <p className="text-xs sm:text-sm text-ink-muted">Scan a barcode or search by name to instantly view price and availability.</p>
       </header>
 
       <form onSubmit={handleSearch} className="relative max-w-2xl w-full mx-auto flex gap-3">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-            <Search className="w-6 h-6 text-gray-400" />
+            <Search className="w-5 h-5 text-ink-muted" />
           </div>
           <input
             ref={inputRef}
@@ -132,22 +132,22 @@ export default function LookupPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Scan barcode or type product name..."
-            className="w-full pl-12 pr-12 py-4 text-lg border-2 border-gray-200 rounded-2xl focus:border-accent focus:ring-4 focus:ring-accent/10 outline-none transition-all"
+            className="w-full pl-11 pr-12 py-3.5 text-base bg-surface text-ink-primary border-2 border-border rounded-2xl focus:border-accent focus:ring-4 focus:ring-accent/10 outline-none transition-all shadow-xs"
             autoFocus
           />
           <button 
             type="button"
             onClick={() => setIsCameraOpen(true)}
-            className="absolute inset-y-2 right-2 px-4 text-gray-500 hover:text-accent hover:bg-red-50 rounded-xl transition-colors flex items-center justify-center"
+            className="absolute inset-y-2 right-2 px-3 text-ink-muted hover:text-accent hover:bg-row-alt rounded-xl transition-colors flex items-center justify-center cursor-pointer"
             title="Scan with Camera"
           >
-            <Camera className="w-6 h-6" />
+            <Camera className="w-5 h-5" />
           </button>
         </div>
         <button 
           type="submit" 
           disabled={loading}
-          className="px-8 bg-accent text-white font-bold text-lg rounded-2xl hover:bg-accent-hover transition-colors disabled:opacity-50 flex items-center gap-2"
+          className="px-6 sm:px-8 bg-accent text-white font-bold text-sm sm:text-base rounded-2xl hover:bg-accent-hover transition-colors disabled:opacity-50 flex items-center gap-2 shadow-xs cursor-pointer"
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Lookup'}
         </button>
@@ -161,25 +161,25 @@ export default function LookupPage() {
       )}
 
       {results.length > 0 && (
-        <div className="grid gap-4 mt-8">
+        <div className="grid gap-3.5 mt-6">
           {results.map(variant => (
-            <div key={variant.variant_id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
+            <div key={variant.variant_id} className="bg-surface p-5 sm:p-6 rounded-2xl shadow-xs border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-12 h-12 bg-row-alt border border-border rounded-xl flex items-center justify-center text-ink-muted shrink-0">
                   <Package className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900">{variant.name}</h3>
-                  <p className="text-sm text-gray-500 font-mono mt-1">Barcode: {variant.barcode || 'N/A'}</p>
-                  <p className="text-sm text-gray-500 mt-1">Packaged as: {variant.pieces_per_set} pieces / set</p>
+                  <h3 className="text-base sm:text-lg font-bold text-ink-primary">{variant.name}</h3>
+                  <p className="text-xs text-ink-muted font-mono mt-0.5">Barcode: {variant.barcode || 'N/A'}</p>
+                  <p className="text-xs text-ink-muted mt-0.5">Packaged as: <strong className="text-ink-primary">{variant.pieces_per_set} pieces / set</strong></p>
                 </div>
               </div>
-              <div className="text-right space-y-2">
-                <div className="text-3xl font-bold text-accent">
+              <div className="text-left sm:text-right space-y-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-border">
+                <div className="text-2xl sm:text-3xl font-extrabold text-accent font-mono">
                   {formatINR(variant.price)}
                 </div>
-                <div className="flex gap-2 justify-end">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <div className="flex gap-2 sm:justify-end">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                     {formatDualQuantity(variant.stock_quantity, variant.pieces_per_set)} in stock
                   </span>
                 </div>
@@ -190,10 +190,10 @@ export default function LookupPage() {
       )}
 
       {query && results.length === 0 && !loading && (
-        <div className="text-center p-12 bg-gray-50 rounded-2xl border border-gray-200">
-          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-900">Product Not Found</h3>
-          <p className="text-gray-500 mt-1">No matching barcode or product name in inventory.</p>
+        <div className="text-center p-12 bg-surface rounded-2xl border border-border shadow-xs">
+          <AlertCircle className="w-12 h-12 text-ink-muted mx-auto mb-3" />
+          <h3 className="text-base font-bold text-ink-primary">Product Not Found</h3>
+          <p className="text-xs text-ink-muted mt-1">No matching barcode or product name in inventory.</p>
         </div>
       )}
     </div>

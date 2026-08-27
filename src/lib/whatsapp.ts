@@ -77,7 +77,7 @@ export function cleanWhatsAppPhone(phone?: string | null): string | null {
  */
 export function formatWhatsAppMessage(template: string, data: WhatsAppTemplateData): string {
   const customerName = data.customer_name?.trim() || 'Valued Customer';
-  const storeName = data.store_name?.trim() || 'Melbon Wholesale';
+  const storeName = data.store_name?.trim() || 'Melbun Wholesale';
   const invoiceNum = data.invoice_number?.trim() || 'N/A';
   const dateStr = data.date?.trim() || new Date().toLocaleDateString('en-IN', { dateStyle: 'medium' });
   const totalAmt = typeof data.total_amount === 'number' ? formatINR(data.total_amount) : (data.total_amount || '₹0.00');
