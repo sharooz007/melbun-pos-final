@@ -75,6 +75,8 @@ function POSContent() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [resolvedCustomerId, setResolvedCustomerId] = useState<string | null>(null);
   const [customerCredit, setCustomerCredit] = useState<number>(0);
+  const [originalStoreCreditApplied, setOriginalStoreCreditApplied] = useState<number>(0);
+  const [originalInvoiceCustomerId, setOriginalInvoiceCustomerId] = useState<string | null>(null);
   const [isMobileCheckoutOpen, setIsMobileCheckoutOpen] = useState(false);
   const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
@@ -291,11 +293,13 @@ function POSContent() {
             setCustomerName(inv.customers.name || '');
             setCustomerPhone(inv.customers.phone || '');
             setResolvedCustomerId(inv.customers.id);
+            setOriginalInvoiceCustomerId(inv.customers.id);
             setCustomerCredit(Number(inv.customers.credit_balance || 0));
           } else {
             setCustomerName('');
             setCustomerPhone('');
             setResolvedCustomerId(null);
+            setOriginalInvoiceCustomerId(null);
             setCustomerCredit(0);
           }
 
@@ -325,8 +329,14 @@ function POSContent() {
             setCart(loadedCart);
           }
 
-          // 5. Payment details
+          // 5. Payment details & Store Credit extraction
+          let origStoreCredit = 0;
           if (inv.payments && inv.payments.length > 0) {
+            inv.payments.forEach((p: any) => {
+              if (p.method === 'STORE_CREDIT') {
+                origStoreCredit += Number(p.amount) || 0;
+              }
+            });
             if (inv.payments.length === 1) {
               const p = inv.payments[0];
               if (p.method === 'STORE_CREDIT') {
@@ -356,6 +366,7 @@ function POSContent() {
             setPaymentMethod('CREDIT');
             setAmountPaidStr('');
           }
+          setOriginalStoreCreditApplied(origStoreCredit);
         } else {
           setStatus({ type: 'error', msg: res?.error || 'Failed to load invoice for editing' });
         }
@@ -719,6 +730,16 @@ function POSContent() {
     }));
   };
 
+  const isOriginalInvoiceCustomer = Boolean(
+    editInvoiceId && 
+    resolvedCustomerId && 
+    originalInvoiceCustomerId && 
+    resolvedCustomerId === originalInvoiceCustomerId
+  );
+  const effectiveAvailableCredit = round2(
+    (customerCredit || 0) + (isOriginalInvoiceCustomer ? originalStoreCreditApplied : 0)
+  );
+
   const handleSaveSplit = () => {
     setSplitError(null);
     const cash = parseFloat(splitCash) || 0;
@@ -730,8 +751,8 @@ function POSContent() {
       return;
     }
 
-    if (credit > customerCredit) {
-      setSplitError(`Store credit amount (₹${credit.toFixed(2)}) exceeds customer available credit balance of ₹${customerCredit.toFixed(2)}.`);
+    if (credit > effectiveAvailableCredit) {
+      setSplitError(`Store credit amount (₹${credit.toFixed(2)}) exceeds customer available credit balance of ₹${effectiveAvailableCredit.toFixed(2)}.`);
       return;
     }
 
@@ -792,6 +813,8 @@ function POSContent() {
     setSplitSaved(false);
     setEditInvoiceId(null);
     setEditInvoiceNumber(null);
+    setOriginalStoreCreditApplied(0);
+    setOriginalInvoiceCustomerId(null);
   };
 
 function formatHumanReadableError(errorMsg: string): string {
@@ -904,8 +927,8 @@ function formatHumanReadableError(errorMsg: string): string {
           isSubmittingRef.current = false;
           return;
         }
-        if (customerCredit < finalTotal) {
-          setStatus({ type: 'error', msg: `Insufficient store credit balance (Available: ₹${customerCredit.toFixed(2)}, Bill: ₹${finalTotal.toFixed(2)}).` });
+        if (effectiveAvailableCredit < finalTotal) {
+          setStatus({ type: 'error', msg: `Insufficient store credit balance (Available: ₹${effectiveAvailableCredit.toFixed(2)}, Bill: ₹${finalTotal.toFixed(2)}).` });
           setLoading(false);
           isSubmittingRef.current = false;
           return;
@@ -1492,13 +1515,13 @@ function formatHumanReadableError(errorMsg: string): string {
                   )}
                 </div>
 
-                {customerCredit > 0 && (
+                {effectiveAvailableCredit > 0 && (
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Wallet className="w-4 h-4 text-emerald-700" />
                       <div>
                         <p className="text-xs font-bold text-emerald-900">Available Store Credit</p>
-                        <p className="text-[11px] text-emerald-700 font-mono">₹{customerCredit.toFixed(2)}</p>
+                        <p className="text-[11px] text-emerald-700 font-mono">₹{effectiveAvailableCredit.toFixed(2)}</p>
                       </div>
                     </div>
                     {paymentMethod !== 'STORE_CREDIT' && paymentMethod !== 'SPLIT' && (
@@ -1657,7 +1680,7 @@ function formatHumanReadableError(errorMsg: string): string {
                 <label className="text-[13px] font-bold text-ink-primary">Payment method</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(['CASH', 'UPI', 'CREDIT', 'SPLIT', 'STORE_CREDIT'] as const).map(m => {
-                    if (m === 'STORE_CREDIT' && customerCredit <= 0) return null;
+                    if (m === 'STORE_CREDIT' && effectiveAvailableCredit <= 0) return null;
                     return (
                       <button
                         key={m}
@@ -1788,7 +1811,7 @@ function formatHumanReadableError(errorMsg: string): string {
                   isInitialLoadingInvoice ||
                   cart.length === 0 || 
                   ((paymentMethod === 'CASH' || paymentMethod === 'UPI') && parseFloat(amountPaidStr || '0') > finalTotal) ||
-                  (paymentMethod === 'STORE_CREDIT' && customerCredit < finalTotal)
+                  (paymentMethod === 'STORE_CREDIT' && effectiveAvailableCredit < finalTotal)
                 }
                 className={`w-full py-3.5 rounded-[10px] font-bold text-[15px] transition-colors disabled:opacity-50 shadow-sm flex items-center justify-center gap-2 ${
                   editInvoiceId 
@@ -1838,14 +1861,14 @@ function formatHumanReadableError(errorMsg: string): string {
               </div>
             )}
             <div className="space-y-3.5">
-              {customerCredit > 0 && (
+              {effectiveAvailableCredit > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-xs font-bold text-emerald-800 flex items-center gap-1">
                       <Wallet className="w-3.5 h-3.5 text-emerald-700" />
                       Store Credit (₹)
                     </label>
-                    <span className="text-[11px] font-medium text-emerald-700">Max ₹{customerCredit.toFixed(2)}</span>
+                    <span className="text-[11px] font-medium text-emerald-700">Max ₹{effectiveAvailableCredit.toFixed(2)}</span>
                   </div>
                   <input 
                     type="number" 
@@ -1855,8 +1878,8 @@ function formatHumanReadableError(errorMsg: string): string {
                     onFocus={e => e.target.select()}
                     onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                     onChange={e => { setSplitCredit(e.target.value); setSplitSaved(false); setSplitError(null); }}
-                    placeholder={`0.00 (Max ${customerCredit.toFixed(2)})`} 
-                    max={customerCredit}
+                    placeholder={`0.00 (Max ${effectiveAvailableCredit.toFixed(2)})`} 
+                    max={effectiveAvailableCredit}
                     className="w-full p-2.5 bg-emerald-50/50 border border-emerald-200 rounded-xl font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 text-emerald-900"
                   />
                 </div>
