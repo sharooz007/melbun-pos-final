@@ -92,7 +92,7 @@ export default function SettingsPage() {
   const [whatsappInvoiceTemplate, setWhatsappInvoiceTemplate] = useState(DEFAULT_WHATSAPP_INVOICE_TEMPLATE);
   const [whatsappDueReminderTemplate, setWhatsappDueReminderTemplate] = useState(DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE);
   const [activeTemplateTab, setActiveTemplateTab] = useState<'invoice' | 'due'>('invoice');
-  const [rightPreviewTab, setRightPreviewTab] = useState<'receipt' | 'whatsapp'>('whatsapp');
+  const [rightPreviewTab, setRightPreviewTab] = useState<'receipt' | 'whatsapp' | 'invoice'>('invoice');
 
   // Baseline Snapshot for Dirty Tracking & Discard
   const [initialData, setInitialData] = useState<StoreSettings | null>(null);
@@ -724,7 +724,19 @@ export default function SettingsPage() {
                     }`}
                   >
                     <Receipt className="w-3.5 h-3.5 text-accent" />
-                    <span>Thermal Receipt</span>
+                    <span>Thermal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRightPreviewTab('invoice')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      rightPreviewTab === 'invoice'
+                        ? 'bg-surface text-ink-primary shadow-2xs'
+                        : 'text-ink-muted hover:text-ink-primary'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#8B2515]" />
+                    <span>A4 Invoice</span>
                   </button>
                 </div>
                 <span className="text-[10px] bg-accent/10 text-accent font-bold px-2 py-0.5 rounded-full">
@@ -754,7 +766,7 @@ export default function SettingsPage() {
                           activeTemplateTab === 'invoice' ? whatsappInvoiceTemplate : whatsappDueReminderTemplate,
                           {
                             customer_name: 'Ramesh Kumar',
-                            store_name: storeName || 'Melbun Wholesale',
+                            store_name: storeName || 'MELBUN CLOTHING',
                             invoice_number: 'MELBUN/2026/000142',
                             date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
                             item_count: 3,
@@ -762,8 +774,8 @@ export default function SettingsPage() {
                             paid_amount: activeTemplateTab === 'invoice' ? 1573.95 : 1000.00,
                             due_amount: activeTemplateTab === 'invoice' ? 0 : 573.95,
                             status: activeTemplateTab === 'invoice' ? 'Paid' : 'Partial (Due: ₹573.95)',
-                            store_phone: phone || '+91 98765 43210',
-                            store_address: address || 'MG Road, Bengaluru'
+                            store_phone: phone || '+91 9440028819',
+                            store_address: address || 'SMS CENTRE, BANK ROAD, KASARAGOD 671121'
                           }
                         )}
                       </div>
@@ -774,13 +786,144 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
+              ) : rightPreviewTab === 'invoice' ? (
+                /* Luxury Terracotta A4 Tax Invoice Live Simulation Card */
+                <div className="bg-[#FCFBF9] text-gray-900 rounded-2xl border border-[#D9B9B2] p-4 shadow-md space-y-3 text-left font-sans text-[11px] overflow-hidden">
+                  {/* Top Header */}
+                  <div className="flex items-start justify-between gap-2 border-b border-[#D9B9B2]/60 pb-3">
+                    {/* Logo block */}
+                    <div className="w-16 h-16 bg-[#8B2515] rounded-lg p-1.5 flex flex-col items-center justify-center text-white shrink-0 shadow-2xs">
+                      <div className="w-7 h-7 mb-0.5 relative">
+                        {/* Emblem Icon */}
+                        <svg viewBox="0 0 125.83 148.84" className="w-full h-full fill-white">
+                          <path d="M70.37,95.64l16.11-10.96c-7.82-1.27-10.93-.72-16.16,4.44l-2.51,26.27c-1.33,2.28-3.26,4.49-4.97,6.4l-4.61-6.31-2.6-26.55c-2.07-1.49-4.23-3.82-6.55-4.34-3.1-.71-6.15-.43-9.52.08l15.77,10.8.08,8.18-16.08-8.21-.15-10.92-6.11,4.44,13.65,24.28,2.04,35.14-3.65-3.45c-3.43-3.24-6.46-6.65-8.94-10.75l-12.47-20.66-.98-19.57c-2.49-2.47-3.13-5.54-1.09-8.53.5-1.04.67-2.81-.13-3.62l-8.22-8.31c-.54-.55-1.19-2.26-1.19-3.04l-.04-11.8c-3.32-1.61-4.02-4.43-3.94-7.69l.19-8.53c.08-3.55-4.17-3.35-4.18-9.03v-11.42C.46,20.17-.05,17.13,0,13.62L.23,0l17.29,17.55,21.78,22.05c6.03-5.39,12.25-8.16,19.98-9.88l-4.47-4.81,8.16-17.78,8.26,17.71-4.54,4.81c7.63,1.83,14.04,4.51,20.09,9.94l18.18-18.49L125.78.04l.05,18.4c-1.7,1.55-3.91,3.39-3.91,5.77v11.18c0,2.64-4.13,3.03-4.16,7.6l-.07,12.4c-2,1.75-3.9,3.52-3.9,6.3l.02,10.42-10.15,10.73,2.28,6.76c-1.7,2.6-2.77,5.11-2.93,8.18l-.82,15.99-14.31,23.63-10.6,11.45,2.22-35.55,13.38-24.44-6.15-4.47-.12,11.08-15.96,8.14-.29-7.96Z" />
+                        </svg>
+                      </div>
+                      <span className="font-extrabold text-[8px] tracking-wider leading-none">MELBUN</span>
+                      <span className="text-[4px] tracking-widest leading-none mt-0.5 opacity-90">SIGN OF RICH</span>
+                    </div>
+
+                    {/* Store details */}
+                    <div className="min-w-0 flex-1 px-1">
+                      <h4 className="font-black text-xs text-[#8B2515] uppercase tracking-wide truncate">
+                        {storeName || 'MELBUN CLOTHING'}
+                      </h4>
+                      <p className="text-[9px] text-gray-600 truncate mt-0.5">
+                        {address || 'SMS CENTRE, BANK ROAD, KASARAGOD 671121'}
+                      </p>
+                      <p className="text-[9px] text-gray-600">
+                        Phone: {phone || '9440028819'} • Email: {email || 'melbunindia@gmail.com'}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[9px] font-bold text-gray-800 font-mono">
+                          GSTIN: {gstin || '32CHLPA3518R2Z8'}
+                        </span>
+                        <span className="px-1.5 py-0.2 bg-[#8B2515]/10 text-[#8B2515] font-bold rounded text-[8px]">
+                          State: 32-Kerala
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Document Title */}
+                    <div className="text-right shrink-0">
+                      <div className="font-serif font-black text-sm text-[#8B2515] tracking-wide">
+                        TAX INVOICE
+                      </div>
+                      <div className="text-[7px] text-[#C28936] font-bold mt-0.5">
+                        ◆   ❖   ◆
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dual Card: BILL TO & INVOICE DETAILS */}
+                  <div className="grid grid-cols-2 gap-2 text-[9px]">
+                    <div className="bg-white p-2 rounded-lg border border-[#D9B9B2]">
+                      <div className="bg-[#8B2515] text-white px-1.5 py-0.5 rounded font-bold text-[8px] mb-1">
+                        👤 BILL TO:
+                      </div>
+                      <div className="font-bold text-gray-900">Strawberry kids</div>
+                      <div className="text-gray-500 text-[8px] truncate">NANAN COMPLEX, NELLYADY</div>
+                      <div className="text-gray-600 text-[8px]">Contact: +919747640579</div>
+                      <div className="text-gray-600 text-[8px] flex justify-between font-mono">
+                        <span>State: 29-Karnataka</span>
+                        <span className="font-bold">GSTIN: 29AFHPN...</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-2 rounded-lg border border-[#D9B9B2]">
+                      <div className="bg-[#8B2515] text-white px-1.5 py-0.5 rounded font-bold text-[8px] mb-1">
+                        📄 INVOICE DETAILS:
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">No:</span>
+                        <span className="font-bold font-mono">MELBUN/2026/57</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Date:</span>
+                        <span className="font-bold">{new Date().toLocaleDateString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Place of Supply:</span>
+                        <span className="font-bold text-gray-800">29-Karnataka</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Line Items Mini Table */}
+                  <div className="bg-white rounded-lg border border-[#D9B9B2] overflow-hidden text-[9px]">
+                    <div className="bg-[#8B2515] text-white font-bold grid grid-cols-6 p-1 text-center text-[8px]">
+                      <span className="col-span-2 text-left pl-1">Item Name</span>
+                      <span>HSN</span>
+                      <span>Qty</span>
+                      <span className="text-right">Price</span>
+                      <span className="text-right pr-1">Amount</span>
+                    </div>
+                    <div className="divide-y divide-gray-100 p-1 space-y-0.5">
+                      <div className="grid grid-cols-6 text-[8.5px] items-center">
+                        <span className="col-span-2 font-medium truncate pl-1">5800 1-5 Shirt</span>
+                        <span className="text-center font-mono text-gray-500">6109</span>
+                        <span className="text-center font-bold">20 Pcs</span>
+                        <span className="text-right font-mono">₹255.00</span>
+                        <span className="text-right font-mono font-bold pr-1">₹5,100.00</span>
+                      </div>
+                      <div className="grid grid-cols-6 text-[8.5px] items-center pt-0.5">
+                        <span className="col-span-2 font-medium truncate pl-1">Honko wonzne 6-10</span>
+                        <span className="text-center font-mono text-gray-500">6109</span>
+                        <span className="text-center font-bold">25 Pcs</span>
+                        <span className="text-right font-mono">₹285.00</span>
+                        <span className="text-right font-mono font-bold pr-1">₹7,125.00</span>
+                      </div>
+                    </div>
+                    <div className="bg-[#701C0F] text-white font-bold grid grid-cols-6 p-1 text-[8.5px]">
+                      <span className="col-span-2 text-left pl-1">Total Pieces: 45 Pcs</span>
+                      <span className="col-span-4 text-right pr-1 font-mono">₹12,225.00</span>
+                    </div>
+                  </div>
+
+                  {/* Bottom: Totals & Words */}
+                  <div className="bg-white p-2 rounded-lg border border-[#D9B9B2] space-y-1.5 text-[9px]">
+                    <div className="bg-[#8B2515] text-white p-1 rounded font-bold flex justify-between text-[10px]">
+                      <span>FINAL INVOICE TOTAL</span>
+                      <span className="font-mono">₹12,836.25</span>
+                    </div>
+                    <div className="text-[8px] text-gray-700 font-serif italic">
+                      <span className="font-bold not-italic text-[#8B2515]">INVOICE AMOUNT IN WORDS: </span>
+                      Twelve Thousand Eight Hundred and Thirty Six Rupees and Twenty Five Paise only
+                    </div>
+                  </div>
+
+                  {/* Bottom Ribbon */}
+                  <div className="bg-[#8B2515] text-white text-center py-1 rounded font-serif italic text-[9px]">
+                    ❖ Thank you for your business! ❖
+                  </div>
+                </div>
               ) : (
                 /* Thermal Paper Simulation Card */
                 <div className="bg-surface rounded-2xl border-2 border-dashed border-border p-6 shadow-sm space-y-4 font-mono text-center relative overflow-hidden">
                   {/* Store Header Simulation */}
                   <div className="space-y-1 border-b border-dashed border-border pb-4">
                     <h3 className="font-extrabold text-base tracking-tight text-ink-primary uppercase truncate">
-                      {storeName || 'MELBUN POS'}
+                      {storeName || 'MELBUN CLOTHING'}
                     </h3>
                     {tagline && (
                       <p className="text-[11px] text-ink-muted font-sans font-medium">

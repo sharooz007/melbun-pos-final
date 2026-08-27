@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { InvoiceLookupData } from '@/types/returns';
+import { numberToIndianWords } from '@/lib/numberToWords';
 
 // ==========================================
 // STORE CONFIGURATION & THEME CONSTANTS
@@ -13,29 +13,34 @@ export interface StoreConfig {
   phone: string;
   email?: string;
   gstin?: string;
+  state?: string;
 }
 
 export const DEFAULT_STORE_CONFIG: StoreConfig = {
-  storeName: 'Melbun Wholesale',
-  tagline: 'Premium Wholesale & Retail POS',
-  addressLine1: 'Shop #12, Commercial Central Market',
-  addressLine2: 'MG Road, Bengaluru, Karnataka - 560001',
-  phone: '+91 98765 43210',
-  email: 'billing@melbunwholesale.com',
-  gstin: '29ABCDE1234F1Z5',
+  storeName: 'MELBUN CLOTHING',
+  tagline: 'SIGN OF RICH',
+  addressLine1: 'SMS CENTRE, BANK ROAD, KASARAGOD 671121',
+  addressLine2: '',
+  phone: '9440028819',
+  email: 'melbunindia@gmail.com',
+  gstin: '32CHLPA3518R2Z8',
+  state: '32-Kerala',
 };
 
-// Brand Color Palette (Deep Burgundy / Crimson)
-const BRAND_PRIMARY: [number, number, number] = [139, 0, 0]; // #8B0000
-const BRAND_DARK: [number, number, number] = [100, 0, 0];
+// Luxury Terracotta Brand Palette (Matching reference design)
+const BRAND_PRIMARY: [number, number, number] = [139, 37, 21]; // #8B2515 Deep Terracotta Rust
+const BRAND_DARK: [number, number, number] = [112, 28, 15]; // #701C0F Dark Rust
+const BRAND_GOLD: [number, number, number] = [194, 137, 54]; // #C28936 Warm Gold
 const TEXT_PRIMARY: [number, number, number] = [30, 41, 59]; // slate-800
 const TEXT_MUTED: [number, number, number] = [100, 116, 139]; // slate-500
-const BG_LIGHT: [number, number, number] = [248, 250, 252]; // slate-50
+const BG_LIGHT: [number, number, number] = [252, 251, 249]; // #FCFBF9 Warm Ivory
+const BG_CARD: [number, number, number] = [255, 255, 255];
 const BORDER_COLOR: [number, number, number] = [226, 232, 240]; // slate-200
-const DANGER_RED: [number, number, number] = [220, 38, 38]; // red-600
+const BORDER_TERRACOTTA: [number, number, number] = [217, 185, 178];
+const DANGER_RED: [number, number, number] = [185, 28, 28]; // red-700
 const SUCCESS_GREEN: [number, number, number] = [22, 101, 52]; // green-800
 
-// Safe currency formatter for PDF rendering (Prevents unicode encoding corruption)
+// Safe currency formatter for PDF rendering (Prevents unicode encoding corruption in PDF engines)
 export const formatCurrency = (amount: number | string | null | undefined): string => {
   const numeric = typeof amount === 'number' ? amount : parseFloat(String(amount || 0));
   const safeNum = isNaN(numeric) ? 0 : numeric;
@@ -57,8 +62,9 @@ export interface GenerateInvoicePdfOptions {
 }
 
 /**
- * Enterprise-grade POS Invoice PDF Generator for MelbunPOS
- * Fully hardened against invalid payloads, null fields, voided transactions, and partial returns.
+ * Enterprise Luxury Apparel Tax/Retail Invoice PDF Generator for MelbunPOS
+ * 1-to-1 matching the reference design layout with Terracotta branding,
+ * HSN Tax Summary matrix, dual customer cards, and number-to-words.
  */
 export const generateInvoicePDF = (
   invoice: any,
@@ -77,34 +83,33 @@ export const generateInvoicePDF = (
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 14;
+  const margin = 12;
   const contentWidth = pageWidth - margin * 2;
   let currentY = margin;
 
   // ==========================================
-  // 1. VOIDED WATERMARK & SECURITY BANNER
+  // 1. VOIDED WATERMARK & BANNER (If Voided)
   // ==========================================
   if (invoice.is_voided) {
-    // Red Security Warning Banner
-    doc.setFillColor(254, 226, 226); // red-100
+    doc.setFillColor(254, 226, 226);
     doc.setDrawColor(...DANGER_RED);
     doc.setLineWidth(0.5);
-    doc.rect(margin, currentY, contentWidth, 10, 'FD');
+    doc.rect(margin, currentY, contentWidth, 8, 'FD');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setTextColor(...DANGER_RED);
-    doc.text('*** VOIDED / CANCELLED INVOICE - NOT VALID FOR SALE ***', pageWidth / 2, currentY + 6.5, {
+    doc.text('*** VOIDED / CANCELLED INVOICE - NOT VALID FOR SALE ***', pageWidth / 2, currentY + 5.5, {
       align: 'center',
     });
 
-    currentY += 14;
+    currentY += 11;
 
     // Diagonal Background Watermark
     doc.saveGraphicsState();
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(60);
-    doc.setTextColor(239, 68, 68); // light red
+    doc.setFontSize(55);
+    doc.setTextColor(239, 68, 68);
     doc.setGState(new (doc as any).GState({ opacity: 0.12 }));
     doc.text('VOIDED', pageWidth / 2, pageHeight / 2, {
       align: 'center',
@@ -114,177 +119,315 @@ export const generateInvoicePDF = (
   }
 
   // ==========================================
-  // 2. STORE BRANDING & INVOICE HEADER
+  // 2. LUXURY STORE BRANDING & HEADER
   // ==========================================
   const headerStartY = currentY;
+  const logoBoxWidth = 38;
+  const logoBoxHeight = 36;
 
-  // Left Column: Store Branding
+  // 2A. Left Terracotta Logo Block
+  doc.setFillColor(...BRAND_PRIMARY);
+  doc.roundedRect(margin, headerStartY, logoBoxWidth, logoBoxHeight, 2, 2, 'F');
+
+  // Decorative diamond borders inside logo box
+  doc.setDrawColor(...BRAND_GOLD);
+  doc.setLineWidth(0.3);
+  doc.line(margin + 4, headerStartY + 3.5, margin + logoBoxWidth - 4, headerStartY + 3.5);
+  doc.line(margin + 4, headerStartY + logoBoxHeight - 3.5, margin + logoBoxWidth - 4, headerStartY + logoBoxHeight - 3.5);
+
+  // Helmet / Warrior Monogram Icon Representation (Geometric vector paths)
+  const logoCenterX = margin + logoBoxWidth / 2;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(255, 255, 255);
+
+  // Helmet crest apex
+  doc.triangle(
+    logoCenterX, headerStartY + 7,
+    logoCenterX - 6, headerStartY + 14,
+    logoCenterX + 6, headerStartY + 14,
+    'FD'
+  );
+  // Helmet wings
+  doc.triangle(
+    logoCenterX - 6, headerStartY + 11,
+    logoCenterX - 11, headerStartY + 7,
+    logoCenterX - 7, headerStartY + 19,
+    'FD'
+  );
+  doc.triangle(
+    logoCenterX + 6, headerStartY + 11,
+    logoCenterX + 11, headerStartY + 7,
+    logoCenterX + 7, headerStartY + 19,
+    'FD'
+  );
+  // Visor faceplate
+  doc.roundedRect(logoCenterX - 5, headerStartY + 15, 10, 8, 1, 1, 'FD');
+  doc.setFillColor(...BRAND_PRIMARY);
+  doc.rect(logoCenterX - 3, headerStartY + 17.5, 6, 2.5, 'F'); // Eye slit
+
+  // Brand Name inside logo box
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(...BRAND_PRIMARY);
-  doc.text(cleanAscii(store.storeName), margin, currentY + 4);
+  doc.setFontSize(10.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text('MELBUN', logoCenterX, headerStartY + 28, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...TEXT_MUTED);
+  doc.setFontSize(4.8);
+  doc.setTextColor(255, 255, 255);
+  doc.text('SIGN OF RICH', logoCenterX, headerStartY + 31.5, { align: 'center' });
 
-  let brandY = currentY + 9;
-  if (store.tagline) {
-    doc.text(cleanAscii(store.tagline), margin, brandY);
-    brandY += 4;
-  }
-  doc.text(cleanAscii(store.addressLine1), margin, brandY);
-  brandY += 4;
-  if (store.addressLine2) {
-    doc.text(cleanAscii(store.addressLine2), margin, brandY);
-    brandY += 4;
-  }
-  doc.text(`Phone: ${store.phone} | Email: ${store.email || 'N/A'}`, margin, brandY);
-  brandY += 4;
-  if (store.gstin) {
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...TEXT_PRIMARY);
-    doc.text(`Store GSTIN: ${store.gstin}`, margin, brandY);
-    doc.setFont('helvetica', 'normal');
-  }
-
-  // Right Column: Invoice Metadata Box
-  const metaBoxWidth = 70;
-  const metaBoxX = pageWidth - margin - metaBoxWidth;
-
-  doc.setFillColor(...BG_LIGHT);
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(metaBoxX, headerStartY, metaBoxWidth, 34, 2, 2, 'FD');
-
+  // 2B. Center Column: Store Profile & Legal Info
+  const centerStartX = margin + logoBoxWidth + 5;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
+  doc.setFontSize(14.5);
   doc.setTextColor(...BRAND_PRIMARY);
-  doc.text(invoice.gst_applied ? 'TAX INVOICE' : 'RETAIL INVOICE', metaBoxX + 4, headerStartY + 7);
+  doc.text(cleanAscii(store.storeName), centerStartX, headerStartY + 5);
 
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.8);
+  doc.setTextColor(...TEXT_PRIMARY);
+
+  let profileY = headerStartY + 10.5;
+  doc.text(`Loc: ${cleanAscii(store.addressLine1)}`, centerStartX, profileY);
+  profileY += 4.2;
+  if (store.addressLine2) {
+    doc.text(`      ${cleanAscii(store.addressLine2)}`, centerStartX, profileY);
+    profileY += 4.2;
+  }
+  doc.text(`Phone: ${cleanAscii(store.phone)}`, centerStartX, profileY);
+  profileY += 4.2;
+  doc.text(`Email: ${cleanAscii(store.email || 'N/A')}`, centerStartX, profileY);
+  profileY += 4.2;
+  doc.setFont('helvetica', 'bold');
+  doc.text(`GSTIN: ${cleanAscii(store.gstin || 'N/A')}`, centerStartX, profileY);
+  doc.setFont('helvetica', 'normal');
+
+  // State Badge Pill
+  const stateBadgeX = centerStartX + 52;
+  const stateBadgeY = profileY - 3.5;
+  doc.setFillColor(...BG_LIGHT);
+  doc.setDrawColor(...BORDER_TERRACOTTA);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(stateBadgeX, stateBadgeY, 26, 5, 1, 1, 'FD');
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...BRAND_PRIMARY);
+  doc.text(`State: ${cleanAscii(store.state || '32-Kerala')}`, stateBadgeX + 13, stateBadgeY + 3.5, { align: 'center' });
+
+  // 2C. Right Column: Document Title & Ornamental Rule
+  const rightWidth = 55;
+  const rightX = pageWidth - margin - rightWidth;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...BRAND_PRIMARY);
+  const docTitle = invoice.gst_applied ? 'TAX INVOICE' : 'RETAIL INVOICE';
+  doc.text(docTitle, pageWidth - margin, headerStartY + 7, { align: 'right' });
+
+  // Decorative Diamond Line underneath title
+  doc.setDrawColor(...BRAND_PRIMARY);
+  doc.setLineWidth(0.35);
+  doc.line(rightX, headerStartY + 11, pageWidth - margin, headerStartY + 11);
+  doc.setFontSize(6);
+  doc.setTextColor(...BRAND_GOLD);
+  doc.text('◆   ❖   ◆', rightX + rightWidth / 2, headerStartY + 10.5, { align: 'center' });
+
+  currentY = headerStartY + logoBoxHeight + 4;
+
+  // ==========================================
+  // 3. DUAL-CARD METADATA: BILL TO & INVOICE DETAILS
+  // ==========================================
+  const cardGap = 3.5;
+  const cardWidth = (contentWidth - cardGap) / 2;
+  const cardHeight = 27;
+  const cardHeaderHeight = 5.5;
+
+  const customer = invoice.customers;
+  const customerName = cleanAscii(customer?.name || 'Walk-in Customer / Cash Sale');
+  const customerPhone = cleanAscii(customer?.phone ? `+91 ${customer.phone}` : 'Unregistered');
+  const customerAddress = cleanAscii(customer?.address || 'N/A');
+  const customerGstin = cleanAscii(customer?.gstin || 'N/A');
+  const customerState = customer?.state || (store.state || '32-Kerala');
+  const placeOfSupply = invoice.place_of_supply || customerState;
+
+  // 3A. Left Card: BILL TO
+  const leftCardX = margin;
+  doc.setFillColor(...BG_LIGHT);
+  doc.setDrawColor(...BORDER_TERRACOTTA);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(leftCardX, currentY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+  // Title Ribbon
+  doc.setFillColor(...BRAND_PRIMARY);
+  doc.rect(leftCardX, currentY, cardWidth, cardHeaderHeight, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text('BILL TO:', leftCardX + 3.5, currentY + 3.8);
+
+  // Customer Body
+  let custBodyY = currentY + cardHeaderHeight + 3.5;
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
+  doc.setTextColor(...TEXT_PRIMARY);
+  doc.text(customerName, leftCardX + 3.5, custBodyY);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
   doc.setTextColor(...TEXT_MUTED);
-  doc.text('Invoice Number:', metaBoxX + 4, headerStartY + 14);
+  custBodyY += 3.5;
+  const splitAddr = doc.splitTextToSize(customerAddress, cardWidth - 7);
+  doc.text(splitAddr.slice(0, 1), leftCardX + 3.5, custBodyY);
+
+  custBodyY += 3.5;
+  doc.text(`Contact No: ${customerPhone}`, leftCardX + 3.5, custBodyY);
+
+  custBodyY += 3.5;
+  doc.text(`State: ${cleanAscii(customerState)}`, leftCardX + 3.5, custBodyY);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`GSTIN: ${customerGstin}`, leftCardX + cardWidth - 3.5, custBodyY, { align: 'right' });
+
+  // 3B. Right Card: INVOICE DETAILS
+  const rightCardX = margin + cardWidth + cardGap;
+  doc.setFillColor(...BG_LIGHT);
+  doc.setDrawColor(...BORDER_TERRACOTTA);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(rightCardX, currentY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+  // Title Ribbon
+  doc.setFillColor(...BRAND_PRIMARY);
+  doc.rect(rightCardX, currentY, cardWidth, cardHeaderHeight, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text('INVOICE DETAILS:', rightCardX + 3.5, currentY + 3.8);
+
+  // Details Body
+  let invBodyY = currentY + cardHeaderHeight + 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text('No:', rightCardX + 3.5, invBodyY);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...TEXT_PRIMARY);
-  doc.text(invoice.invoice_number, metaBoxX + 4, headerStartY + 18);
+  doc.text(invoice.invoice_number, rightCardX + 16, invBodyY);
 
+  invBodyY += 5;
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...TEXT_MUTED);
-  doc.text('Date & Time:', metaBoxX + 4, headerStartY + 24);
+  doc.text('Date:', rightCardX + 3.5, invBodyY);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...TEXT_PRIMARY);
   const formattedDate = invoice.created_at
-    ? new Date(invoice.created_at).toLocaleString('en-IN', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
+    ? new Date(invoice.created_at).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
       })
     : 'N/A';
-  doc.text(formattedDate, metaBoxX + 4, headerStartY + 28);
+  doc.text(formattedDate, rightCardX + 16, invBodyY);
 
-  currentY = Math.max(brandY + 6, headerStartY + 38);
-
-  // Divider line
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.setLineWidth(0.4);
-  doc.line(margin, currentY, pageWidth - margin, currentY);
-  currentY += 5;
-
-  // ==========================================
-  // 3. CUSTOMER DETAILS SECTION
-  // ==========================================
-  doc.setFillColor(...BG_LIGHT);
-  doc.roundedRect(margin, currentY, contentWidth, 18, 1.5, 1.5, 'FD');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...BRAND_PRIMARY);
-  doc.text('BILLED TO:', margin + 4, currentY + 5);
-
-  const customer = invoice.customers;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(...TEXT_PRIMARY);
-  const customerName = cleanAscii(customer?.name || 'Walk-in Customer / Cash Sale');
-  doc.text(customerName, margin + 4, currentY + 10.5);
-
+  invBodyY += 5;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
   doc.setTextColor(...TEXT_MUTED);
-  const customerPhone = cleanAscii(customer?.phone ? `Phone: ${customer.phone}` : 'Phone: Unregistered');
-  const customerGstin = customer?.gstin ? ` | GSTIN: ${cleanAscii(customer.gstin)}` : '';
-  doc.text(`${customerPhone}${customerGstin}`, margin + 4, currentY + 15);
+  doc.text('Place of Supply:', rightCardX + 3.5, invBodyY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...TEXT_PRIMARY);
+  doc.text(cleanAscii(placeOfSupply), rightCardX + 28, invBodyY);
 
-  // Status Badge on the right
-  const badgeWidth = 28;
-  const badgeX = pageWidth - margin - badgeWidth - 4;
-  if (invoice.is_voided) {
-    doc.setFillColor(254, 226, 226);
-    doc.roundedRect(badgeX, currentY + 4, badgeWidth, 8, 1, 1, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...DANGER_RED);
-    doc.text('VOIDED', badgeX + badgeWidth / 2, currentY + 9, { align: 'center' });
-  } else {
-    doc.setFillColor(220, 252, 231);
-    doc.roundedRect(badgeX, currentY + 4, badgeWidth, 8, 1, 1, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...SUCCESS_GREEN);
-    doc.text('COMPLETED', badgeX + badgeWidth / 2, currentY + 9, { align: 'center' });
-  }
-
-  currentY += 23;
+  currentY += cardHeight + 4;
 
   // ==========================================
-  // 4. LINE ITEMS TABLE (Deeply Styled)
+  // 4. LINE ITEMS TABLE (Deep Terracotta Theme)
   // ==========================================
   const tableItems = invoice.invoice_items || [];
+  let totalPiecesCount = 0;
+  let subtotalSum = 0;
+
+  const tableHead = invoice.gst_applied
+    ? [['#', 'Item Name', 'HSN / SAC', 'Quantity', 'Unit', 'Price / Unit (Rs.)', 'Amount (Rs.)']]
+    : [['#', 'Item Name', 'Quantity', 'Unit', 'Price / Unit (Rs.)', 'Amount (Rs.)']];
+
   const tableBody = tableItems.map((item: any, index: number) => {
     const itemName = cleanAscii(item.variants?.name || 'Item');
-    const barcode = item.variants?.barcode ? `\nBarcode: ${cleanAscii(item.variants.barcode)}` : '';
-    
-    // Check if item has returns associated
-    const totalReturned = (item.returns || []).reduce((acc: number, r: any) => acc + (r.quantity || 0), 0);
-    const returnNote = totalReturned > 0 ? `\n[Returned: ${totalReturned} pcs]` : '';
-
+    const hsn = cleanAscii(item.variants?.products?.categories?.hsn_code || '6109');
     const unitPrice = Number(item.selling_price_snapshot || 0);
     const qty = Number(item.quantity || 0);
     const lineTotal = unitPrice * qty;
 
-    return [
-      (index + 1).toString(),
-      `${itemName}${barcode}${returnNote}`,
-      formatCurrency(unitPrice),
-      qty.toString(),
-      formatCurrency(lineTotal),
-    ];
+    totalPiecesCount += qty;
+    subtotalSum += lineTotal;
+
+    if (invoice.gst_applied) {
+      return [
+        (index + 1).toString(),
+        itemName,
+        hsn,
+        qty.toString(),
+        'Pcs',
+        unitPrice.toFixed(2),
+        lineTotal.toFixed(2),
+      ];
+    } else {
+      return [
+        (index + 1).toString(),
+        itemName,
+        qty.toString(),
+        'Pcs',
+        unitPrice.toFixed(2),
+        lineTotal.toFixed(2),
+      ];
+    }
   });
+
+  // Table summary row
+  const tableFooter = invoice.gst_applied
+    ? [['', 'Total', '', totalPiecesCount.toString(), '', '', subtotalSum.toFixed(2)]]
+    : [['', 'Total', totalPiecesCount.toString(), '', '', subtotalSum.toFixed(2)]];
 
   autoTable(doc, {
     startY: currentY,
-    head: [['#', 'Item Description', 'Unit Price', 'Qty', 'Total']],
+    head: tableHead,
     body: tableBody,
+    foot: tableFooter,
     theme: 'grid',
     headStyles: {
       fillColor: BRAND_PRIMARY,
       textColor: [255, 255, 255],
       fontStyle: 'bold',
-      fontSize: 8.5,
-      halign: 'left',
-      cellPadding: 2.5,
+      fontSize: 7.5,
+      halign: 'center',
+      cellPadding: 2.2,
     },
-    columnStyles: {
-      0: { halign: 'center', cellWidth: 10 },
-      1: { halign: 'left', cellWidth: 'auto' },
-      2: { halign: 'right', cellWidth: 32 },
-      3: { halign: 'center', cellWidth: 18 },
-      4: { halign: 'right', cellWidth: 34 },
+    footStyles: {
+      fillColor: BRAND_DARK,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'right',
+      cellPadding: 2.2,
     },
+    columnStyles: invoice.gst_applied
+      ? {
+          0: { halign: 'center', cellWidth: 8 },
+          1: { halign: 'left', cellWidth: 'auto' },
+          2: { halign: 'center', cellWidth: 20 },
+          3: { halign: 'center', cellWidth: 16 },
+          4: { halign: 'center', cellWidth: 14 },
+          5: { halign: 'right', cellWidth: 28 },
+          6: { halign: 'right', cellWidth: 28 },
+        }
+      : {
+          0: { halign: 'center', cellWidth: 8 },
+          1: { halign: 'left', cellWidth: 'auto' },
+          2: { halign: 'center', cellWidth: 20 },
+          3: { halign: 'center', cellWidth: 16 },
+          4: { halign: 'right', cellWidth: 32 },
+          5: { halign: 'right', cellWidth: 32 },
+        },
     bodyStyles: {
       textColor: TEXT_PRIMARY,
-      fontSize: 8,
-      cellPadding: 2.2,
+      fontSize: 7.5,
+      cellPadding: 2,
     },
     alternateRowStyles: {
       fillColor: BG_LIGHT,
@@ -292,223 +435,265 @@ export const generateInvoicePDF = (
     margin: { left: margin, right: margin, bottom: 25 },
   });
 
-  currentY = (doc as any).lastAutoTable.finalY + 6;
+  currentY = (doc as any).lastAutoTable.finalY + 4;
 
   // ==========================================
-  // 5. RETURNS & REFUNDS SUB-TABLE (If Applicable)
+  // 5. MID-BOTTOM SECTION: TAX SUMMARY & TOTALS
   // ==========================================
-  const allReturns = tableItems.flatMap((i: any) =>
-    (i.returns || []).map((r: any) => ({
-      ...r,
-      variantName: i.variants?.name || 'Item',
-    }))
-  );
-
-  if (allReturns.length > 0) {
-    // Avoid page overflow
-    if (currentY > pageHeight - 65) {
-      doc.addPage();
-      currentY = margin;
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...DANGER_RED);
-    doc.text('Processed Returns & Refund Ledger:', margin, currentY);
-    currentY += 2;
-
-    const returnsBody = allReturns.map((r: any, idx: number) => [
-      (idx + 1).toString(),
-      r.variantName,
-      `${r.quantity} pcs (${r.return_type})`,
-      r.refund_method,
-      formatCurrency(r.total_refund_amount),
-    ]);
-
-    autoTable(doc, {
-      startY: currentY,
-      head: [['#', 'Returned Item', 'Qty & Type', 'Refund Method', 'Refunded Amount']],
-      body: returnsBody,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [185, 28, 28], // red-700
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        fontSize: 8,
-        cellPadding: 2,
-      },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 8 },
-        1: { halign: 'left', cellWidth: 'auto' },
-        2: { halign: 'left', cellWidth: 35 },
-        3: { halign: 'center', cellWidth: 25 },
-        4: { halign: 'right', cellWidth: 32 },
-      },
-      bodyStyles: {
-        textColor: TEXT_PRIMARY,
-        fontSize: 7.5,
-        cellPadding: 1.8,
-      },
-      alternateRowStyles: {
-        fillColor: [254, 242, 242], // red-50
-      },
-      margin: { left: margin, right: margin, bottom: 25 },
-    });
-
-    currentY = (doc as any).lastAutoTable.finalY + 6;
-  }
-
-  // ==========================================
-  // 6. FINANCIAL TOTALS & TAX BREAKDOWN BLOCK
-  // ==========================================
-  // Payment status calculations
   const totalPaid = (invoice.payments || []).reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
-  const totalRefunds = (invoice.invoice_items || []).flatMap((i: any) => i.returns || []).reduce((acc: number, r: any) => acc + (Number(r.total_refund_amount) || 0), 0);
-  const effectiveTotal = Math.max(0, Number(invoice.final_total || 0) - totalRefunds);
-  const balanceDue = invoice.is_voided ? 0 : Math.max(0, effectiveTotal - totalPaid);
+  const finalTotalNum = Number(invoice.final_total || 0);
+  const discountNum = Number(invoice.discount_amount || 0);
+  const balanceDue = invoice.is_voided ? 0 : Math.max(0, finalTotalNum - totalPaid);
+  const youSaved = discountNum;
 
-  // Calculate dynamic rows for summary box
-  let summaryRowCount = 1; // Subtotal
-  if (Number(invoice.discount_amount) > 0) summaryRowCount++;
-  if (invoice.gst_applied) summaryRowCount += 2;
-  if (Number(invoice.round_off) !== 0) summaryRowCount++;
-  if (totalRefunds > 0) summaryRowCount += 2; // Refunded line + Effective Net Total line
-  if (totalPaid > 0) summaryRowCount++;
-  if (balanceDue > 0) summaryRowCount++;
+  const splitSectionWidth = (contentWidth - 4) / 2;
+  const leftColX = margin;
+  const rightColX = margin + splitSectionWidth + 4;
 
-  const totalsBoxHeight = Math.max(45, 10 + (summaryRowCount * 4.5) + 8.5);
+  const midSectionStartY = currentY;
 
-  if (currentY + totalsBoxHeight > pageHeight - 20) {
+  // Check page overflow
+  if (midSectionStartY + 65 > pageHeight - 20) {
     doc.addPage();
     currentY = margin;
   }
 
-  const totalsBoxWidth = 85;
-  const totalsBoxX = pageWidth - margin - totalsBoxWidth;
-  const totalsStartY = currentY;
-  const leftBoxHeight = totalsBoxHeight;
+  // 5A. LEFT COLUMN: TAX SUMMARY (When GST Enabled)
+  if (invoice.gst_applied) {
+    const hsnMap: Record<string, { taxable: number; cgst: number; sgst: number; totalTax: number }> = {};
+    tableItems.forEach((item: any) => {
+      const hsn = cleanAscii(item.variants?.products?.categories?.hsn_code || '6109');
+      const itemSubtotal = Number(item.selling_price_snapshot || 0) * Number(item.quantity || 0);
+      const cgst = itemSubtotal * 0.025;
+      const sgst = itemSubtotal * 0.025;
+      const tax = cgst + sgst;
 
-  // Left Note Box (Payment Terms & Remarks)
-  const leftBoxWidth = contentWidth - totalsBoxWidth - 6;
-  doc.setFillColor(...BG_LIGHT);
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.roundedRect(margin, totalsStartY, leftBoxWidth, leftBoxHeight, 1.5, 1.5, 'FD');
+      if (!hsnMap[hsn]) {
+        hsnMap[hsn] = { taxable: 0, cgst: 0, sgst: 0, totalTax: 0 };
+      }
+      hsnMap[hsn].taxable += itemSubtotal;
+      hsnMap[hsn].cgst += cgst;
+      hsnMap[hsn].sgst += sgst;
+      hsnMap[hsn].totalTax += tax;
+    });
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(...BRAND_PRIMARY);
-  doc.text('PAYMENT & TRANSACTION DETAILS', margin + 4, totalsStartY + 5);
+    const taxHead = [['HSN / SAC', 'Taxable Amt', 'CGST %', 'CGST Rs', 'SGST %', 'SGST Rs', 'Total Tax']];
+    let totalTaxableSum = 0;
+    let totalCgstSum = 0;
+    let totalSgstSum = 0;
+    let totalTaxSum = 0;
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(...TEXT_MUTED);
-  
-  const positivePayments = (invoice.payments || []).filter((p: any) => Number(p.amount) > 0);
-  const paymentDetails = positivePayments.length > 0
-    ? positivePayments.map((p: any) => `${p.method}: ${formatCurrency(p.amount)}`).join(', ')
-    : Number(invoice.final_total) === 0
-    ? 'COMPLIMENTARY / ₹0 SALE'
-    : 'UNPAID / ON ACCOUNT (CREDIT TAB)';
-  
-  doc.text(`Tender Mode: ${paymentDetails}`, margin + 4, totalsStartY + 10);
-  if (balanceDue > 0) {
+    const taxBody = Object.keys(hsnMap).map((hsn) => {
+      const row = hsnMap[hsn];
+      totalTaxableSum += row.taxable;
+      totalCgstSum += row.cgst;
+      totalSgstSum += row.sgst;
+      totalTaxSum += row.totalTax;
+
+      return [
+        hsn,
+        row.taxable.toFixed(2),
+        '2.5',
+        row.cgst.toFixed(2),
+        '2.5',
+        row.sgst.toFixed(2),
+        row.totalTax.toFixed(2),
+      ];
+    });
+
+    const taxFoot = [[
+      'TOTAL',
+      totalTaxableSum.toFixed(2),
+      '',
+      totalCgstSum.toFixed(2),
+      '',
+      totalSgstSum.toFixed(2),
+      totalTaxSum.toFixed(2),
+    ]];
+
+    // Tax Summary Header Bar
+    doc.setFillColor(...BG_LIGHT);
+    doc.setDrawColor(...BORDER_TERRACOTTA);
+    doc.rect(leftColX, midSectionStartY, splitSectionWidth, 4, 'FD');
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...DANGER_RED);
-    doc.text(`Outstanding Due Balance: ${formatCurrency(balanceDue)}`, margin + 4, totalsStartY + 15);
+    doc.setFontSize(7);
+    doc.setTextColor(...BRAND_PRIMARY);
+    doc.text('TAX SUMMARY:', leftColX + 2, midSectionStartY + 3);
+
+    autoTable(doc, {
+      startY: midSectionStartY + 4,
+      head: taxHead,
+      body: taxBody,
+      foot: taxFoot,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [240, 235, 230],
+        textColor: BRAND_PRIMARY,
+        fontStyle: 'bold',
+        fontSize: 6.5,
+        halign: 'center',
+        cellPadding: 1.5,
+      },
+      footStyles: {
+        fillColor: BRAND_PRIMARY,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 6.8,
+        halign: 'right',
+        cellPadding: 1.5,
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 14 },
+        1: { halign: 'right', cellWidth: 15 },
+        2: { halign: 'center', cellWidth: 10 },
+        3: { halign: 'right', cellWidth: 13 },
+        4: { halign: 'center', cellWidth: 10 },
+        5: { halign: 'right', cellWidth: 13 },
+        6: { halign: 'right', cellWidth: 14 },
+      },
+      bodyStyles: {
+        textColor: TEXT_PRIMARY,
+        fontSize: 6.5,
+        cellPadding: 1.2,
+      },
+      margin: { left: leftColX, right: pageWidth - leftColX - splitSectionWidth },
+    });
+  } else {
+    // Non-GST Clean Note Box
+    doc.setFillColor(...BG_LIGHT);
+    doc.setDrawColor(...BORDER_TERRACOTTA);
+    doc.roundedRect(leftColX, midSectionStartY, splitSectionWidth, 38, 1.5, 1.5, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...BRAND_PRIMARY);
+    doc.text('PAYMENT DETAILS:', leftColX + 3.5, midSectionStartY + 5);
+
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
     doc.setTextColor(...TEXT_MUTED);
+    const posPayments = (invoice.payments || []).filter((p: any) => Number(p.amount) > 0);
+    const payStr = posPayments.length > 0
+      ? posPayments.map((p: any) => `${p.method}: ${formatCurrency(p.amount)}`).join(' | ')
+      : 'CASH SALE';
+    doc.text(`Tender Mode: ${payStr}`, leftColX + 3.5, midSectionStartY + 10);
   }
-  doc.text('Terms & Conditions:', margin + 4, totalsStartY + (balanceDue > 0 ? 20 : 16));
-  doc.text('1. Goods once sold can only be returned within 7 days.', margin + 4, totalsStartY + (balanceDue > 0 ? 24 : 20));
-  doc.text('2. Original invoice required for all returns or warranty claims.', margin + 4, totalsStartY + (balanceDue > 0 ? 28 : 24));
-  doc.text('3. In case of discrepancy, jurisdiction is Bengaluru.', margin + 4, totalsStartY + (balanceDue > 0 ? 32 : 28));
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...TEXT_PRIMARY);
-  doc.text('Thank you for your business with Melbun Wholesale!', margin + 4, totalsStartY + leftBoxHeight - 4);
 
-  // Right Totals Breakdown Box
+  // 5B. RIGHT COLUMN: FINANCIAL TOTALS, WORDS, & RECEIVED
+  const rightTotalsHeight = 52;
   doc.setFillColor(...BG_LIGHT);
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.roundedRect(totalsBoxX, totalsStartY, totalsBoxWidth, totalsBoxHeight, 1.5, 1.5, 'FD');
+  doc.setDrawColor(...BORDER_TERRACOTTA);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(rightColX, midSectionStartY, splitSectionWidth, rightTotalsHeight, 1.5, 1.5, 'FD');
 
-  let summaryY = totalsStartY + 5;
-  const printSummaryRow = (label: string, value: string, isBold: boolean = false, isDanger: boolean = false) => {
+  let rY = midSectionStartY + 4.5;
+  const printRightRow = (label: string, value: string, isBold: boolean = false, color: [number, number, number] = TEXT_PRIMARY) => {
     doc.setFont('helvetica', isBold ? 'bold' : 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(isDanger ? DANGER_RED[0] : TEXT_PRIMARY[0], isDanger ? DANGER_RED[1] : TEXT_PRIMARY[1], isDanger ? DANGER_RED[2] : TEXT_PRIMARY[2]);
-    doc.text(label, totalsBoxX + 4, summaryY);
-    doc.text(value, pageWidth - margin - 4, summaryY, { align: 'right' });
-    summaryY += 4.5;
+    doc.setFontSize(7.2);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text(label, rightColX + 3.5, rY);
+    doc.text(':', rightColX + splitSectionWidth - 32, rY);
+    doc.setTextColor(...color);
+    doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+    doc.text(value, rightColX + splitSectionWidth - 3.5, rY, { align: 'right' });
+    rY += 3.8;
   };
 
-  printSummaryRow('Subtotal:', formatCurrency(invoice.subtotal));
+  printRightRow('Sub Total', formatCurrency(invoice.subtotal));
 
-  if (Number(invoice.discount_amount) > 0) {
-    printSummaryRow('Discount Applied:', `-${formatCurrency(invoice.discount_amount)}`, false, true);
+  if (discountNum > 0) {
+    const pct = invoice.subtotal ? ((discountNum / Number(invoice.subtotal)) * 100).toFixed(2) : '0';
+    printRightRow(`Discount (${pct}%)`, formatCurrency(discountNum), false, DANGER_RED);
   }
 
   if (invoice.gst_applied) {
-    const cgst = Number(invoice.cgst_amount || 0);
-    const sgst = Number(invoice.sgst_amount || 0);
-    printSummaryRow('CGST (2.5%):', formatCurrency(cgst));
-    printSummaryRow('SGST (2.5%):', formatCurrency(sgst));
+    const totalTaxAmt = Number(invoice.cgst_amount || 0) + Number(invoice.sgst_amount || 0);
+    printRightRow('Tax (5.0%)', formatCurrency(totalTaxAmt));
   }
 
   if (Number(invoice.round_off) !== 0) {
-    const roundOffSign = Number(invoice.round_off) > 0 ? '+' : '';
-    printSummaryRow('Round Off:', `${roundOffSign}${formatCurrency(invoice.round_off)}`);
+    const sign = Number(invoice.round_off) > 0 ? '+' : '';
+    printRightRow('Round Off', `${sign}${formatCurrency(invoice.round_off)}`);
   }
 
   // Grand Total Highlight Bar
   doc.setFillColor(...BRAND_PRIMARY);
-  doc.rect(totalsBoxX, summaryY - 1, totalsBoxWidth, 7, 'F');
+  doc.rect(rightColX, rY - 0.8, splitSectionWidth, 5.5, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  doc.text('Total', rightColX + 3.5, rY + 3);
+  doc.text(':', rightColX + splitSectionWidth - 32, rY + 3);
+  doc.text(formatCurrency(invoice.final_total), rightColX + splitSectionWidth - 3.5, rY + 3, { align: 'right' });
+  rY += 7.5;
+
+  // Invoice Amount in Words
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.2);
+  doc.setTextColor(...BRAND_PRIMARY);
+  doc.text('INVOICE AMOUNT IN WORDS:', rightColX + 3.5, rY);
+  rY += 3.2;
+
+  const words = numberToIndianWords(invoice.final_total);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.2);
+  doc.setTextColor(...TEXT_PRIMARY);
+  const splitWords = doc.splitTextToSize(words, splitSectionWidth - 7);
+  doc.text(splitWords.slice(0, 2), rightColX + 3.5, rY);
+  rY += (splitWords.slice(0, 2).length * 3) + 2;
+
+  // Payment Breakdown
+  printRightRow('Received', formatCurrency(totalPaid), true, SUCCESS_GREEN);
+  if (balanceDue > 0) {
+    printRightRow('Balance', formatCurrency(balanceDue), true, DANGER_RED);
+  }
+  if (youSaved > 0) {
+    printRightRow('You Saved', formatCurrency(youSaved), false, BRAND_PRIMARY);
+  }
+
+  currentY = midSectionStartY + Math.max(rightTotalsHeight, (invoice.gst_applied ? 42 : 38)) + 3.5;
+
+  // ==========================================
+  // 6. TERMS & CONDITIONS CARD
+  // ==========================================
+  const termsBoxHeight = 19;
+  if (currentY + termsBoxHeight > pageHeight - 16) {
+    doc.addPage();
+    currentY = margin;
+  }
+
+  doc.setFillColor(...BG_LIGHT);
+  doc.setDrawColor(...BORDER_TERRACOTTA);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, currentY, contentWidth, termsBoxHeight, 1.5, 1.5, 'FD');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(7);
+  doc.setTextColor(...BRAND_PRIMARY);
+  doc.text('TERMS AND CONDITIONS:', margin + 3.5, currentY + 3.8);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.2);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text('1. Returns will be accepted only in case of manufacturing defects.', margin + 3.5, currentY + 7.5);
+  doc.text('2. Any return request must be reported within 7 days from the billing date.', margin + 3.5, currentY + 11);
+  doc.text('3. Products must be returned with all original tags intact.', margin + 3.5, currentY + 14.5);
+  doc.text('4. Returned products must be in fresh and unused condition.', margin + 3.5, currentY + 18);
+
+  currentY += termsBoxHeight + 3.5;
+
+  // ==========================================
+  // 7. ORNAMENTAL BOTTOM RIBBON
+  // ==========================================
+  const footerHeight = 8;
+  const footerY = pageHeight - margin - footerHeight;
+
+  doc.setFillColor(...BRAND_PRIMARY);
+  doc.roundedRect(margin, footerY, contentWidth, footerHeight, 1.5, 1.5, 'F');
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(9.5);
   doc.setTextColor(255, 255, 255);
-  doc.text('FINAL TOTAL:', totalsBoxX + 4, summaryY + 4);
-  doc.text(formatCurrency(invoice.final_total), pageWidth - margin - 4, summaryY + 4, {
-    align: 'right',
-  });
-  summaryY += 8.5;
-
-  if (totalRefunds > 0) {
-    printSummaryRow('Refunded (Returns):', `-${formatCurrency(totalRefunds)}`, false, true);
-    printSummaryRow('Effective Net Total:', formatCurrency(effectiveTotal), true);
-  }
-
-  if (totalPaid > 0) {
-    printSummaryRow('Paid Amount:', formatCurrency(totalPaid), true);
-  }
-  if (balanceDue > 0) {
-    printSummaryRow('Balance Due:', formatCurrency(balanceDue), true, true);
-  }
-
-  // ==========================================
-  // 7. FOOTER WITH RUNNING PAGE NUMBERS
-  // ==========================================
-  const totalPages = (doc as any).internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...TEXT_MUTED);
-
-    // Bottom Rule
-    doc.setDrawColor(...BORDER_COLOR);
-    doc.setLineWidth(0.3);
-    doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
-
-    doc.text(
-      `Generated by MelbunPOS Engine on ${new Date().toLocaleDateString('en-IN')}`,
-      margin,
-      pageHeight - 6
-    );
-
-    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 6, {
-      align: 'right',
-    });
-  }
+  doc.text('❖  Thank you for your business!  ❖', pageWidth / 2, footerY + 5.2, { align: 'center' });
 
   // ==========================================
   // 8. DISPATCH ACTION
@@ -520,7 +705,6 @@ export const generateInvoicePDF = (
       doc.output('dataurlnewwindow');
       break;
     case 'blob':
-      // Caller consumes blob for print preview iframe
       break;
     case 'doc':
       return doc;

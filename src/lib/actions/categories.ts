@@ -3,15 +3,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function createCategoryAction(name: string) {
+export async function createCategoryAction(name: string, hsnCode?: string) {
   try {
     const trimmedName = name.trim();
     if (!trimmedName) return { success: false, error: 'Category name cannot be empty.' };
 
     const supabase = createClient()
+    const insertPayload: any = { name: trimmedName };
+    if (hsnCode && hsnCode.trim()) {
+      insertPayload.hsn_code = hsnCode.trim();
+    }
+
     const { data, error } = await supabase
       .from('categories')
-      .insert({ name: trimmedName })
+      .insert(insertPayload)
       .select()
       .single()
 
@@ -29,15 +34,20 @@ export async function createCategoryAction(name: string) {
   }
 }
 
-export async function updateCategoryAction(id: string, name: string) {
+export async function updateCategoryAction(id: string, name: string, hsnCode?: string) {
   try {
     const trimmedName = name.trim();
     if (!trimmedName) return { success: false, error: 'Category name cannot be empty.' };
 
     const supabase = createClient()
+    const updatePayload: any = { name: trimmedName };
+    if (hsnCode !== undefined) {
+      updatePayload.hsn_code = hsnCode ? hsnCode.trim() : '6109';
+    }
+
     const { data, error } = await supabase
       .from('categories')
-      .update({ name: trimmedName })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single()
