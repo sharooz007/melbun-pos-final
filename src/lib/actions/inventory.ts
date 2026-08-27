@@ -274,3 +274,84 @@ export async function getProductStockHistoryAction(productId: string) {
   }
 }
 
+const adjustProductStockSchema = z.object({
+  product_id: z.string().uuid('Invalid product ID'),
+  adjustments: z.array(z.object({
+    variant_id: z.string().uuid('Invalid variant ID'),
+    sets_quantity: z.coerce.number().int().min(0, 'Sets cannot be negative').default(0),
+    loose_quantity: z.coerce.number().int().min(0, 'Loose pieces cannot be negative').default(0)
+  })).min(1, 'At least one variant adjustment is required'),
+  reason: z.string().trim().max(300).optional()
+});
+
+export async function adjustProductStockAction(payload: unknown) {
+  try {
+    const parsed = adjustProductStockSchema.safeParse(payload);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message || 'Invalid adjust payload' };
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc('adjust_product_stock', {
+      p_product_id: parsed.data.product_id,
+      p_adjustments: parsed.data.adjustments,
+      p_reason: parsed.data.reason || null
+    });
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/inventory');
+    revalidatePath('/inventory/products');
+    revalidatePath('/inventory/ledger');
+    revalidatePath('/inventory/arrivals');
+    revalidatePath('/pos');
+    revalidatePath('/reports');
+
+    return { success: true, data };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to adjust stock' };
+  }
+}
+
+const restockProductVariantsSchema = z.object({
+  product_id: z.string().uuid('Invalid product ID'),
+  restocks: z.array(z.object({
+    variant_id: z.string().uuid('Invalid variant ID'),
+    sets_quantity: z.coerce.number().int().min(0, 'Sets cannot be negative').default(0),
+    loose_quantity: z.coerce.number().int().min(0, 'Loose pieces cannot be negative').default(0),
+    cost_price: z.coerce.number().min(0, 'Cost price cannot be negative').default(0),
+    selling_price: z.coerce.number().min(0, 'Selling price cannot be negative').default(0)
+  })).min(1, 'At least one restock variant is required'),
+  notes: z.string().trim().max(300).optional()
+});
+
+export async function restockProductVariantsAction(payload: unknown) {
+  try {
+    const parsed = restockProductVariantsSchema.safeParse(payload);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message || 'Invalid restock payload' };
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc('restock_product_variants', {
+      p_product_id: parsed.data.product_id,
+      p_restocks: parsed.data.restocks,
+      p_notes: parsed.data.notes || null
+    });
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/inventory');
+    revalidatePath('/inventory/products');
+    revalidatePath('/inventory/ledger');
+    revalidatePath('/inventory/arrivals');
+    revalidatePath('/pos');
+    revalidatePath('/reports');
+
+    return { success: true, data };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to restock product' };
+  }
+}
+
+

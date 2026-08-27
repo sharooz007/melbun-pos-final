@@ -29,6 +29,7 @@ import {
 import { ReceiveStockModal } from './ReceiveStockModal'
 import { AddProductModal } from './AddProductModal'
 import { CategoriesModal } from './CategoriesModal'
+import AdjustStockModal from './AdjustStockModal'
 import { 
   processStockArrivalAction, 
   createProductAction, 
@@ -199,6 +200,15 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
       setIsDeleting(false);
       isDeleteSubmittingRef.current = false;
     }
+  };
+
+  const [adjustingProduct, setAdjustingProduct] = useState<any>(null);
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+
+  const handleAdjustClick = (p: any) => {
+    const fullProduct = masterProductsMap.get(p.id) || p;
+    setAdjustingProduct(fullProduct);
+    setIsAdjustModalOpen(true);
   };
 
   const handleEditClick = (p: any) => {
@@ -379,8 +389,18 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                     </div>
                   </div>
 
-                  {/* Right: Tactile Action Chips (History, Edit, Delete) */}
-                  <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                  {/* Right: Tactile Action Chips (2x2 Grid on Mobile, Inline Flex on Desktop) */}
+                  <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                    <button 
+                      onClick={() => handleAdjustClick(p)}
+                      title="Adjust & Restock Inventory"
+                      aria-label="Adjust & Restock Inventory"
+                      className="p-2 sm:px-3 sm:py-2 text-xs text-ink-primary hover:text-accent bg-surface border border-border hover:bg-row-alt rounded-xl font-bold flex items-center gap-1.5 shadow-2xs transition min-h-[38px] min-w-[38px] justify-center cursor-pointer"
+                    >
+                      <SlidersHorizontal className="w-4 h-4 text-accent" />
+                      <span className="hidden sm:inline">Adjust</span>
+                    </button>
+
                     <button 
                       onClick={() => openHistoryModal(p)}
                       title="View Stock Movement History"
@@ -749,6 +769,18 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
       )}
 
       {/* Other Existing Modals */}
+      <AdjustStockModal
+        isOpen={isAdjustModalOpen}
+        onClose={() => {
+          setIsAdjustModalOpen(false);
+          setAdjustingProduct(null);
+        }}
+        product={adjustingProduct}
+        onSuccess={() => {
+          router.refresh();
+        }}
+      />
+
       <ReceiveStockModal 
         isOpen={isReceiveModalOpen} 
         onClose={() => setReceiveModalOpen(false)} 
