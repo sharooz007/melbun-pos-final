@@ -171,7 +171,6 @@ export async function processCheckoutAction(payload: unknown) {
       revalidatePath('/invoices');
       revalidatePath('/customers');
       revalidatePath('/reports');
-      revalidatePath('/dashboard');
       revalidatePath('/');
     } catch {}
 
@@ -233,7 +232,6 @@ export async function updateFullInvoiceAction(payload: unknown) {
       revalidatePath('/inventory');
       revalidatePath('/reports');
       revalidatePath('/customers');
-      revalidatePath('/dashboard');
       revalidatePath('/');
     } catch {}
 
