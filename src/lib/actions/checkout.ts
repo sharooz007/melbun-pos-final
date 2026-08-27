@@ -161,6 +161,10 @@ export async function processCheckoutAction(payload: unknown) {
       return { success: false, error: formatHumanReadableError(error.message) };
     }
 
+    if (!data || !data.invoice_id) {
+      return { success: false, error: 'Failed to create invoice record in database.' };
+    }
+
     try {
       revalidatePath('/pos');
       revalidatePath('/inventory');
@@ -217,6 +221,10 @@ export async function updateFullInvoiceAction(payload: unknown) {
 
     if (error) {
       return { success: false, error: formatHumanReadableError(error.message) };
+    }
+
+    if (!data || !data.invoice_id) {
+      return { success: false, error: 'Failed to update invoice record in database.' };
     }
 
     try {

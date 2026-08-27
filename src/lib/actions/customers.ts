@@ -25,6 +25,10 @@ export async function getOrCreateCustomerAction(name?: string | null, phone?: st
       return { success: false, error: error.message };
     }
 
+    if (!data || !data.customer) {
+      return { success: false, error: 'Failed to retrieve or create customer in database' };
+    }
+
     return { success: true, customer: data.customer };
   } catch (err: any) {
     const msg = err?.message || '';

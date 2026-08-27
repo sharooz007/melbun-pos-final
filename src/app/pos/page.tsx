@@ -991,16 +991,16 @@ function POSContent() {
             paidAmount: totalPaidAmt,
             dueAmount: pendingDueAmt,
             itemCount: validCart.length,
-            invoiceNumber: res.data.invoice_number,
-            invoiceId: res.data.invoice_id
+            invoiceNumber: res?.data?.invoice_number,
+            invoiceId: res?.data?.invoice_id
           });
 
           setIsMobileCheckoutOpen(false);
           setStatus({ 
             type: 'success', 
-            msg: `Invoice ${res.data.invoice_number} generated successfully!`,
-            invoiceId: res.data.invoice_id,
-            invoiceNumber: res.data.invoice_number
+            msg: `Invoice ${res?.data?.invoice_number || ''} generated successfully!`,
+            invoiceId: res?.data?.invoice_id,
+            invoiceNumber: res?.data?.invoice_number
           });
           resetFormState();
         }
