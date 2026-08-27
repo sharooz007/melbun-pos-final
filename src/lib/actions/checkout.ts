@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 const round2 = (num: number): number => Math.round((num + Number.EPSILON) * 100) / 100;
@@ -165,15 +164,6 @@ export async function processCheckoutAction(payload: unknown) {
       return { success: false, error: 'Failed to create invoice record in database.' };
     }
 
-    try {
-      revalidatePath('/pos');
-      revalidatePath('/inventory');
-      revalidatePath('/invoices');
-      revalidatePath('/customers');
-      revalidatePath('/reports');
-      revalidatePath('/');
-    } catch {}
-
     return { success: true, data };
   } catch (err: any) {
     return { success: false, error: formatHumanReadableError(err?.message || 'An unexpected error occurred during checkout') };
@@ -225,15 +215,6 @@ export async function updateFullInvoiceAction(payload: unknown) {
     if (!data || !data.invoice_id) {
       return { success: false, error: 'Failed to update invoice record in database.' };
     }
-
-    try {
-      revalidatePath('/invoices');
-      revalidatePath('/pos');
-      revalidatePath('/inventory');
-      revalidatePath('/reports');
-      revalidatePath('/customers');
-      revalidatePath('/');
-    } catch {}
 
     return { success: true, data };
   } catch (err: any) {
