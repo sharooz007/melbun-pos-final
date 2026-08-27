@@ -135,14 +135,6 @@ export async function processCheckoutAction(payload: unknown) {
     }
 
     const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { 
-        success: false, 
-        error: 'Your login session has expired. Please log out and sign in again.' 
-      };
-    }
-
     const { data, error } = await supabase.rpc('process_checkout', {
       p_customer_id: parsed.data.customer_id,
       p_subtotal: round2(parsed.data.subtotal),
@@ -200,14 +192,6 @@ export async function updateFullInvoiceAction(payload: unknown) {
     }
 
     const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { 
-        success: false, 
-        error: 'Your login session has expired. Please log out and sign in again.' 
-      };
-    }
-
     const { data, error } = await supabase.rpc('update_full_invoice', {
       p_invoice_id: parsed.data.invoice_id,
       p_customer_id: parsed.data.customer_id,

@@ -13,14 +13,6 @@ export async function getOrCreateCustomerAction(name?: string | null, phone?: st
     }
 
     const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { 
-        success: false, 
-        error: 'Your login session has expired. Please log out and sign in again.' 
-      };
-    }
-
     const { data, error } = await supabase.rpc('get_or_create_customer', {
       p_name: trimmedName || null,
       p_phone: trimmedPhone || null
