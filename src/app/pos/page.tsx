@@ -429,7 +429,9 @@ function POSContent() {
         const exactPhoneMatch = res.data.find((c: any) => c.phone && c.phone.trim() === customerPhone.trim());
         if (exactPhoneMatch && !resolvedCustomerId) {
           setResolvedCustomerId(exactPhoneMatch.id);
-          setCustomerName(exactPhoneMatch.name);
+          if (!customerName.trim()) {
+            setCustomerName(exactPhoneMatch.name);
+          }
           setCustomerCredit(Number(exactPhoneMatch.credit_balance || 0));
         }
       }
@@ -1518,7 +1520,9 @@ function formatHumanReadableError(errorMsg: string): string {
                       const matched = customerSuggestions.find(c => c.phone && c.phone.trim() === trimmed);
                       if (matched) {
                         setResolvedCustomerId(matched.id);
-                        setCustomerName(matched.name);
+                        if (!customerName.trim()) {
+                          setCustomerName(matched.name);
+                        }
                         setCustomerCredit(Number(matched.credit_balance || 0));
                       } else {
                         setResolvedCustomerId(null);
