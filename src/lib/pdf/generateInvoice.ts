@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { numberToIndianWords } from '@/lib/numberToWords';
+import { BRAND_ASSETS } from '@/lib/pdf/brandAssets';
 
 // ==========================================
 // STORE CONFIGURATION & THEME CONSTANTS
@@ -30,11 +31,9 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
 // Luxury Terracotta Brand Palette (Matching reference design)
 const BRAND_PRIMARY: [number, number, number] = [139, 37, 21]; // #8B2515 Deep Terracotta Rust
 const BRAND_DARK: [number, number, number] = [112, 28, 15]; // #701C0F Dark Rust
-const BRAND_GOLD: [number, number, number] = [194, 137, 54]; // #C28936 Warm Gold
 const TEXT_PRIMARY: [number, number, number] = [30, 41, 59]; // slate-800
 const TEXT_MUTED: [number, number, number] = [100, 116, 139]; // slate-500
 const BG_LIGHT: [number, number, number] = [252, 251, 249]; // #FCFBF9 Warm Ivory
-const BG_CARD: [number, number, number] = [255, 255, 255];
 const BORDER_COLOR: [number, number, number] = [226, 232, 240]; // slate-200
 const BORDER_TERRACOTTA: [number, number, number] = [217, 185, 178];
 const DANGER_RED: [number, number, number] = [185, 28, 28]; // red-700
@@ -63,8 +62,8 @@ export interface GenerateInvoicePdfOptions {
 
 /**
  * Enterprise Luxury Apparel Tax/Retail Invoice PDF Generator for MelbunPOS
- * 1-to-1 matching the reference design layout with Terracotta branding,
- * HSN Tax Summary matrix, dual customer cards, and number-to-words.
+ * 1-to-1 matching the reference design layout with authentic SVG Terracotta branding,
+ * 10% opacity watermark, product name - variant name formatting, and HSN tax breakdown.
  */
 export const generateInvoicePDF = (
   invoice: any,
@@ -88,7 +87,23 @@ export const generateInvoicePDF = (
   let currentY = margin;
 
   // ==========================================
-  // 1. VOIDED WATERMARK & BANNER (If Voided)
+  // 1. LARGE BACKGROUND WATERMARK (10% Opacity)
+  // ==========================================
+  doc.saveGraphicsState();
+  (doc as any).setGState(new (doc as any).GState({ opacity: 0.10 }));
+  const wmWidth = 90;
+  const wmHeight = 106;
+  const wmX = (pageWidth - wmWidth) / 2;
+  const wmY = (pageHeight - wmHeight) / 2 + 10;
+  try {
+    doc.addImage(BRAND_ASSETS.watermarkBase64, 'PNG', wmX, wmY, wmWidth, wmHeight);
+  } catch (e) {
+    console.error('Failed to render background watermark image:', e);
+  }
+  doc.restoreGraphicsState();
+
+  // ==========================================
+  // 2. VOIDED WATERMARK & BANNER (If Voided)
   // ==========================================
   if (invoice.is_voided) {
     doc.setFillColor(254, 226, 226);
@@ -105,12 +120,12 @@ export const generateInvoicePDF = (
 
     currentY += 11;
 
-    // Diagonal Background Watermark
+    // Diagonal Background Warning
     doc.saveGraphicsState();
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(55);
     doc.setTextColor(239, 68, 68);
-    doc.setGState(new (doc as any).GState({ opacity: 0.12 }));
+    doc.setGState(new (doc as any).GState({ opacity: 0.14 }));
     doc.text('VOIDED', pageWidth / 2, pageHeight / 2, {
       align: 'center',
       angle: 45,
@@ -119,126 +134,97 @@ export const generateInvoicePDF = (
   }
 
   // ==========================================
-  // 2. LUXURY STORE BRANDING & HEADER
+  // 3. LUXURY STORE BRANDING & HEADER
   // ==========================================
   const headerStartY = currentY;
-  const logoBoxWidth = 38;
+  const logoBoxWidth = 36;
   const logoBoxHeight = 36;
 
-  // 2A. Left Terracotta Logo Block
+  // 3A. Left Terracotta Logo Block (Using authentic Base64 PNG derived from user SVGs)
   doc.setFillColor(...BRAND_PRIMARY);
   doc.roundedRect(margin, headerStartY, logoBoxWidth, logoBoxHeight, 2, 2, 'F');
 
-  // Decorative diamond borders inside logo box
-  doc.setDrawColor(...BRAND_GOLD);
-  doc.setLineWidth(0.3);
-  doc.line(margin + 4, headerStartY + 3.5, margin + logoBoxWidth - 4, headerStartY + 3.5);
-  doc.line(margin + 4, headerStartY + logoBoxHeight - 3.5, margin + logoBoxWidth - 4, headerStartY + logoBoxHeight - 3.5);
+  try {
+    // Exact authentic brand logo from text.svg (Helmet Crest + MELBUN + SIGN OF RICH)
+    const imgPadding = 3.5;
+    const imgW = logoBoxWidth - (imgPadding * 2);
+    const imgH = logoBoxHeight - (imgPadding * 2);
+    doc.addImage(
+      BRAND_ASSETS.fullBrandBase64,
+      'PNG',
+      margin + imgPadding,
+      headerStartY + imgPadding,
+      imgW,
+      imgH
+    );
+  } catch (e) {
+    console.error('Failed to embed brand logo image:', e);
+  }
 
-  // Helmet / Warrior Monogram Icon Representation (Geometric vector paths)
-  const logoCenterX = margin + logoBoxWidth / 2;
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(255, 255, 255);
+  // 3B. Center Column: Store Profile & Legal Info
+  const centerStartX = margin + logoBoxWidth + 4.5;
+  const centerAvailableWidth = 84;
 
-  // Helmet crest apex
-  doc.triangle(
-    logoCenterX, headerStartY + 7,
-    logoCenterX - 6, headerStartY + 14,
-    logoCenterX + 6, headerStartY + 14,
-    'FD'
-  );
-  // Helmet wings
-  doc.triangle(
-    logoCenterX - 6, headerStartY + 11,
-    logoCenterX - 11, headerStartY + 7,
-    logoCenterX - 7, headerStartY + 19,
-    'FD'
-  );
-  doc.triangle(
-    logoCenterX + 6, headerStartY + 11,
-    logoCenterX + 11, headerStartY + 7,
-    logoCenterX + 7, headerStartY + 19,
-    'FD'
-  );
-  // Visor faceplate
-  doc.roundedRect(logoCenterX - 5, headerStartY + 15, 10, 8, 1, 1, 'FD');
-  doc.setFillColor(...BRAND_PRIMARY);
-  doc.rect(logoCenterX - 3, headerStartY + 17.5, 6, 2.5, 'F'); // Eye slit
-
-  // Brand Name inside logo box
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
-  doc.setTextColor(255, 255, 255);
-  doc.text('MELBUN', logoCenterX, headerStartY + 28, { align: 'center' });
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(4.8);
-  doc.setTextColor(255, 255, 255);
-  doc.text('SIGN OF RICH', logoCenterX, headerStartY + 31.5, { align: 'center' });
-
-  // 2B. Center Column: Store Profile & Legal Info
-  const centerStartX = margin + logoBoxWidth + 5;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14.5);
+  doc.setFontSize(13.5);
   doc.setTextColor(...BRAND_PRIMARY);
   doc.text(cleanAscii(store.storeName), centerStartX, headerStartY + 5);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.8);
+  doc.setFontSize(7.5);
   doc.setTextColor(...TEXT_PRIMARY);
 
-  let profileY = headerStartY + 10.5;
-  doc.text(`Loc: ${cleanAscii(store.addressLine1)}`, centerStartX, profileY);
-  profileY += 4.2;
-  if (store.addressLine2) {
-    doc.text(`      ${cleanAscii(store.addressLine2)}`, centerStartX, profileY);
-    profileY += 4.2;
-  }
+  let profileY = headerStartY + 10;
+  
+  // Format Address cleanly with splitTextToSize to avoid horizontal collision
+  const fullAddress = [store.addressLine1, store.addressLine2].filter(Boolean).join(', ');
+  const splitStoreAddr = doc.splitTextToSize(`Loc: ${cleanAscii(fullAddress)}`, centerAvailableWidth);
+  doc.text(splitStoreAddr.slice(0, 2), centerStartX, profileY);
+  profileY += (splitStoreAddr.slice(0, 2).length * 3.6) + 0.8;
+
   doc.text(`Phone: ${cleanAscii(store.phone)}`, centerStartX, profileY);
-  profileY += 4.2;
-  doc.text(`Email: ${cleanAscii(store.email || 'N/A')}`, centerStartX, profileY);
-  profileY += 4.2;
+  profileY += 3.6;
+  doc.text(`Email: ${cleanAscii(store.email || 'melbunindia@gmail.com')}`, centerStartX, profileY);
+  profileY += 3.6;
+  
+  // GSTIN & State Badge
   doc.setFont('helvetica', 'bold');
   doc.text(`GSTIN: ${cleanAscii(store.gstin || 'N/A')}`, centerStartX, profileY);
   doc.setFont('helvetica', 'normal');
 
-  // State Badge Pill
-  const stateBadgeX = centerStartX + 52;
-  const stateBadgeY = profileY - 3.5;
+  const stateBadgeX = centerStartX + 46;
+  const stateBadgeY = profileY - 3.2;
   doc.setFillColor(...BG_LIGHT);
   doc.setDrawColor(...BORDER_TERRACOTTA);
   doc.setLineWidth(0.3);
-  doc.roundedRect(stateBadgeX, stateBadgeY, 26, 5, 1, 1, 'FD');
+  doc.roundedRect(stateBadgeX, stateBadgeY, 26, 4.5, 1, 1, 'FD');
   doc.setFontSize(6.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...BRAND_PRIMARY);
-  doc.text(`State: ${cleanAscii(store.state || '32-Kerala')}`, stateBadgeX + 13, stateBadgeY + 3.5, { align: 'center' });
+  doc.text(`State: ${cleanAscii(store.state || '32-Kerala')}`, stateBadgeX + 13, stateBadgeY + 3.2, { align: 'center' });
 
-  // 2C. Right Column: Document Title & Ornamental Rule
+  // 3C. Right Column: Document Title & Geometric Line
   const rightWidth = 55;
   const rightX = pageWidth - margin - rightWidth;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
+  doc.setFontSize(15.5);
   doc.setTextColor(...BRAND_PRIMARY);
   const docTitle = invoice.gst_applied ? 'TAX INVOICE' : 'RETAIL INVOICE';
-  doc.text(docTitle, pageWidth - margin, headerStartY + 7, { align: 'right' });
+  doc.text(docTitle, pageWidth - margin, headerStartY + 6.5, { align: 'right' });
 
-  // Decorative Diamond Line underneath title
+  // Clean geometric line under title
   doc.setDrawColor(...BRAND_PRIMARY);
-  doc.setLineWidth(0.35);
-  doc.line(rightX, headerStartY + 11, pageWidth - margin, headerStartY + 11);
-  doc.setFontSize(6);
-  doc.setTextColor(...BRAND_GOLD);
-  doc.text('◆   ❖   ◆', rightX + rightWidth / 2, headerStartY + 10.5, { align: 'center' });
+  doc.setLineWidth(0.4);
+  doc.line(rightX + 15, headerStartY + 10, pageWidth - margin, headerStartY + 10);
 
-  currentY = headerStartY + logoBoxHeight + 4;
+  currentY = headerStartY + logoBoxHeight + 3.5;
 
   // ==========================================
-  // 3. DUAL-CARD METADATA: BILL TO & INVOICE DETAILS
+  // 4. DUAL-CARD METADATA: BILL TO & INVOICE DETAILS
   // ==========================================
   const cardGap = 3.5;
   const cardWidth = (contentWidth - cardGap) / 2;
-  const cardHeight = 27;
+  const cardHeight = 26;
   const cardHeaderHeight = 5.5;
 
   const customer = invoice.customers;
@@ -249,7 +235,7 @@ export const generateInvoicePDF = (
   const customerState = customer?.state || (store.state || '32-Kerala');
   const placeOfSupply = invoice.place_of_supply || customerState;
 
-  // 3A. Left Card: BILL TO
+  // 4A. Left Card: BILL TO
   const leftCardX = margin;
   doc.setFillColor(...BG_LIGHT);
   doc.setDrawColor(...BORDER_TERRACOTTA);
@@ -286,7 +272,7 @@ export const generateInvoicePDF = (
   doc.setFont('helvetica', 'bold');
   doc.text(`GSTIN: ${customerGstin}`, leftCardX + cardWidth - 3.5, custBodyY, { align: 'right' });
 
-  // 3B. Right Card: INVOICE DETAILS
+  // 4B. Right Card: INVOICE DETAILS
   const rightCardX = margin + cardWidth + cardGap;
   doc.setFillColor(...BG_LIGHT);
   doc.setDrawColor(...BORDER_TERRACOTTA);
@@ -311,7 +297,7 @@ export const generateInvoicePDF = (
   doc.setTextColor(...TEXT_PRIMARY);
   doc.text(invoice.invoice_number, rightCardX + 16, invBodyY);
 
-  invBodyY += 5;
+  invBodyY += 4.8;
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...TEXT_MUTED);
   doc.text('Date:', rightCardX + 3.5, invBodyY);
@@ -326,7 +312,7 @@ export const generateInvoicePDF = (
     : 'N/A';
   doc.text(formattedDate, rightCardX + 16, invBodyY);
 
-  invBodyY += 5;
+  invBodyY += 4.8;
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...TEXT_MUTED);
   doc.text('Place of Supply:', rightCardX + 3.5, invBodyY);
@@ -334,10 +320,10 @@ export const generateInvoicePDF = (
   doc.setTextColor(...TEXT_PRIMARY);
   doc.text(cleanAscii(placeOfSupply), rightCardX + 28, invBodyY);
 
-  currentY += cardHeight + 4;
+  currentY += cardHeight + 3.5;
 
   // ==========================================
-  // 4. LINE ITEMS TABLE (Deep Terracotta Theme)
+  // 5. LINE ITEMS TABLE (Product Name - Variant Name)
   // ==========================================
   const tableItems = invoice.invoice_items || [];
   let totalPiecesCount = 0;
@@ -348,7 +334,18 @@ export const generateInvoicePDF = (
     : [['#', 'Item Name', 'Quantity', 'Unit', 'Price / Unit (Rs.)', 'Amount (Rs.)']];
 
   const tableBody = tableItems.map((item: any, index: number) => {
-    const itemName = cleanAscii(item.variants?.name || 'Item');
+    const pName = item.variants?.products?.name || '';
+    const vName = item.variants?.name || '';
+    
+    // Format as Product Name - Variant Name (e.g. "5800 - 1-5" or "Shirt 015 - White")
+    let itemName = 'Item';
+    if (pName && vName && pName.trim().toLowerCase() !== vName.trim().toLowerCase()) {
+      itemName = `${pName.trim()} - ${vName.trim()}`;
+    } else {
+      itemName = pName.trim() || vName.trim() || 'Item';
+    }
+    itemName = cleanAscii(itemName);
+
     const hsn = cleanAscii(item.variants?.products?.categories?.hsn_code || '6109');
     const unitPrice = Number(item.selling_price_snapshot || 0);
     const qty = Number(item.quantity || 0);
@@ -435,10 +432,10 @@ export const generateInvoicePDF = (
     margin: { left: margin, right: margin, bottom: 25 },
   });
 
-  currentY = (doc as any).lastAutoTable.finalY + 4;
+  currentY = (doc as any).lastAutoTable.finalY + 3.5;
 
   // ==========================================
-  // 5. MID-BOTTOM SECTION: TAX SUMMARY & TOTALS
+  // 6. MID-BOTTOM SECTION: TAX SUMMARY & TOTALS
   // ==========================================
   const totalPaid = (invoice.payments || []).reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
   const finalTotalNum = Number(invoice.final_total || 0);
@@ -452,13 +449,7 @@ export const generateInvoicePDF = (
 
   const midSectionStartY = currentY;
 
-  // Check page overflow
-  if (midSectionStartY + 65 > pageHeight - 20) {
-    doc.addPage();
-    currentY = margin;
-  }
-
-  // 5A. LEFT COLUMN: TAX SUMMARY (When GST Enabled)
+  // 6A. LEFT COLUMN: TAX SUMMARY (When GST Enabled)
   if (invoice.gst_applied) {
     const hsnMap: Record<string, { taxable: number; cgst: number; sgst: number; totalTax: number }> = {};
     tableItems.forEach((item: any) => {
@@ -578,7 +569,7 @@ export const generateInvoicePDF = (
     doc.text(`Tender Mode: ${payStr}`, leftColX + 3.5, midSectionStartY + 10);
   }
 
-  // 5B. RIGHT COLUMN: FINANCIAL TOTALS, WORDS, & RECEIVED
+  // 6B. RIGHT COLUMN: FINANCIAL TOTALS, WORDS, & RECEIVED
   const rightTotalsHeight = 52;
   doc.setFillColor(...BG_LIGHT);
   doc.setDrawColor(...BORDER_TERRACOTTA);
@@ -653,7 +644,7 @@ export const generateInvoicePDF = (
   currentY = midSectionStartY + Math.max(rightTotalsHeight, (invoice.gst_applied ? 42 : 38)) + 3.5;
 
   // ==========================================
-  // 6. TERMS & CONDITIONS CARD
+  // 7. TERMS & CONDITIONS CARD
   // ==========================================
   const termsBoxHeight = 19;
   if (currentY + termsBoxHeight > pageHeight - 16) {
@@ -682,7 +673,7 @@ export const generateInvoicePDF = (
   currentY += termsBoxHeight + 3.5;
 
   // ==========================================
-  // 7. ORNAMENTAL BOTTOM RIBBON
+  // 8. ORNAMENTAL BOTTOM RIBBON
   // ==========================================
   const footerHeight = 8;
   const footerY = pageHeight - margin - footerHeight;
@@ -691,12 +682,12 @@ export const generateInvoicePDF = (
   doc.roundedRect(margin, footerY, contentWidth, footerHeight, 1.5, 1.5, 'F');
 
   doc.setFont('times', 'italic');
-  doc.setFontSize(9.5);
+  doc.setFontSize(10);
   doc.setTextColor(255, 255, 255);
-  doc.text('❖  Thank you for your business!  ❖', pageWidth / 2, footerY + 5.2, { align: 'center' });
+  doc.text('Thank you for your business!', pageWidth / 2, footerY + 5.2, { align: 'center' });
 
   // ==========================================
-  // 8. DISPATCH ACTION
+  // 9. DISPATCH ACTION
   // ==========================================
   const outputFileName = options.fileName || `Invoice_${invoice.invoice_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
 
