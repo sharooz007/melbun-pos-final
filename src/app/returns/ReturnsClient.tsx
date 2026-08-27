@@ -124,6 +124,15 @@ export default function ReturnsClient() {
     loadLedger();
   }, [loadLedger]);
 
+  const closeReturnModal = useCallback(() => {
+    if (submittingReturn) return;
+    setSelectedItem(null);
+    setReturnSets(0);
+    setReturnLoose(0);
+    setNotes('');
+    setModalError(null);
+  }, [submittingReturn]);
+
   // Global Escape key listener for Return Modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -133,7 +142,7 @@ export default function ReturnsClient() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedItem, submittingReturn]);
+  }, [selectedItem, submittingReturn, closeReturnModal]);
 
   // Handle Search Invoice
   const handleSearch = async (e?: React.FormEvent, customQuery?: string) => {
@@ -201,15 +210,6 @@ export default function ReturnsClient() {
     const isCustomerActive = Boolean(invoice?.customer_id && invoice?.customers?.is_active !== false);
     setRefundMethod(isCustomerActive ? 'STORE_CREDIT' : 'CASH');
     setReturnType('RESTOCK');
-    setNotes('');
-    setModalError(null);
-  };
-
-  const closeReturnModal = () => {
-    if (submittingReturn) return;
-    setSelectedItem(null);
-    setReturnSets(0);
-    setReturnLoose(0);
     setNotes('');
     setModalError(null);
   };

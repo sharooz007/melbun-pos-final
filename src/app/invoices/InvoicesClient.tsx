@@ -243,6 +243,23 @@ export default function InvoicesClient({
     }
   }, [searchParams, router]);
 
+  const closeVoidModal = useCallback(() => {
+    if (loading) return;
+    setSelectedInvoice(null);
+    setReason('');
+    setValidationError(null);
+  }, [loading]);
+
+  const closeUndoModal = useCallback(() => {
+    if (undoLoading) return;
+    setUndoInvoice(null);
+  }, [undoLoading]);
+
+  const closeDeleteModal = useCallback(() => {
+    if (deleteLoading) return;
+    setDeleteInvoice(null);
+  }, [deleteLoading]);
+
   // Global Escape keydown listener to close open modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -257,7 +274,11 @@ export default function InvoicesClient({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [loading, undoLoading, deleteLoading, inspectLoading, selectedInvoice, undoInvoice, deleteInvoice, inspectInvoice]);
+  }, [
+    loading, undoLoading, deleteLoading, inspectLoading,
+    selectedInvoice, undoInvoice, deleteInvoice, inspectInvoice,
+    closeVoidModal, closeUndoModal, closeDeleteModal
+  ]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages || isFetching) return;
@@ -305,13 +326,6 @@ export default function InvoicesClient({
     setReason('');
     setValidationError(null);
     setStatus(null);
-  };
-
-  const closeVoidModal = () => {
-    if (loading) return;
-    setSelectedInvoice(null);
-    setReason('');
-    setValidationError(null);
   };
 
   const handleConfirmVoid = async () => {
@@ -364,11 +378,6 @@ export default function InvoicesClient({
     setStatus(null);
   };
 
-  const closeUndoModal = () => {
-    if (undoLoading) return;
-    setUndoInvoice(null);
-  };
-
   const handleConfirmUndoVoid = async () => {
     if (isSubmittingRef.current || undoLoading || !undoInvoice) return;
 
@@ -407,11 +416,6 @@ export default function InvoicesClient({
     if (!inv.is_voided) return;
     setDeleteInvoice(inv);
     setStatus(null);
-  };
-
-  const closeDeleteModal = () => {
-    if (deleteLoading) return;
-    setDeleteInvoice(null);
   };
 
   const handleConfirmPermanentDelete = async () => {

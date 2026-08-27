@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PackagePlus, X, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 
 interface AddProductModalProps {
@@ -17,9 +17,10 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
   const [variants, setVariants] = useState<any[]>([{ name: '', barcode: '', cost_price: 0, selling_price: 0, initial_sets: '', initial_loose: '' }]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const prevIsOpenRef = useRef(false);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       if (initialData) {
         setName(initialData.name || '');
         setCategoryId(initialData.category_id || (categories.length > 0 ? categories[0].id : ''));
@@ -33,7 +34,8 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
       }
       setError('');
     }
-  }, [isOpen, initialData?.id]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, initialData, categories]);
 
   if (!isOpen) return null;
 

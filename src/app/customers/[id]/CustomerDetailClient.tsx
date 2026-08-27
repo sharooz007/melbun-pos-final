@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   ArrowLeft, 
   Loader2, 
@@ -97,7 +97,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
   // Credit History Modal State
   const [isCreditHistoryModalOpen, setIsCreditHistoryModalOpen] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const [custRes, invRes, payRes, retRes, credRes, settingsRes] = await Promise.all([
@@ -117,11 +117,11 @@ export default function CustomerDetailClient({ id }: { id: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     load();
-  }, [id]);
+  }, [load]);
 
   const handleSendWhatsAppDueReminder = (inv?: any) => {
     const template = storeSettings?.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE;

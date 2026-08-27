@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { 
   Package, 
   X, 
@@ -74,41 +74,10 @@ export function ReceiveStockModal({
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Reset state on open
-  useEffect(() => {
-    if (isOpen) {
-      setProductSearch('');
-      setIsSearchDropdownOpen(false);
-      setCommonNotes('');
-      setCustomRows([{ variant_id: '', sets_quantity: 0, loose_quantity: 0, notes: '' }]);
-      
-      // Auto-select first product if available, or leave open for search
-      if (products.length > 0) {
-        handleSelectProduct(products[0]);
-      } else {
-        setSelectedProduct(null);
-        setBatchRows([]);
-      }
-    }
-  }, [isOpen]);
-
-  // Filtered Products for Live Search Dropdown
-  const filteredProducts = useMemo(() => {
-    const q = productSearch.trim().toLowerCase();
-    if (!q) return products.slice(0, 10);
-
-    return products.filter((p: any) => {
-      const pName = (p.name || '').toLowerCase();
-      const cat = (categories.find(c => c.id === p.category_id)?.name || '').toLowerCase();
-      const hasMatchingBarcode = p.variants?.some((v: any) => (v.barcode || '').toLowerCase().includes(q));
-      const hasMatchingVariant = p.variants?.some((v: any) => (v.name || '').toLowerCase().includes(q));
-      return pName.includes(q) || cat.includes(q) || hasMatchingBarcode || hasMatchingVariant;
-    }).slice(0, 15);
-  }, [products, productSearch, categories]);
+  const prevIsOpenRef = useRef(false);
 
   // Select Product and populate all its variants
-  const handleSelectProduct = (prod: any) => {
+  const handleSelectProduct = useCallback((prod: any) => {
     setSelectedProduct(prod);
     setProductSearch('');
     setIsSearchDropdownOpen(false);
@@ -133,7 +102,40 @@ export function ReceiveStockModal({
     } else {
       setBatchRows([]);
     }
-  };
+  }, []);
+
+  // Reset state on open
+  useEffect(() => {
+    if (isOpen && !prevIsOpenRef.current) {
+      setProductSearch('');
+      setIsSearchDropdownOpen(false);
+      setCommonNotes('');
+      setCustomRows([{ variant_id: '', sets_quantity: 0, loose_quantity: 0, notes: '' }]);
+      
+      // Auto-select first product if available, or leave open for search
+      if (products.length > 0) {
+        handleSelectProduct(products[0]);
+      } else {
+        setSelectedProduct(null);
+        setBatchRows([]);
+      }
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, products, handleSelectProduct]);
+
+  // Filtered Products for Live Search Dropdown
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return products.slice(0, 10);
+
+    return products.filter((p: any) => {
+      const pName = (p.name || '').toLowerCase();
+      const cat = (categories.find(c => c.id === p.category_id)?.name || '').toLowerCase();
+      const hasMatchingBarcode = p.variants?.some((v: any) => (v.barcode || '').toLowerCase().includes(q));
+      const hasMatchingVariant = p.variants?.some((v: any) => (v.name || '').toLowerCase().includes(q));
+      return pName.includes(q) || cat.includes(q) || hasMatchingBarcode || hasMatchingVariant;
+    }).slice(0, 15);
+  }, [products, productSearch, categories]);
 
   // Update Batch Row Quantities
   const updateBatchRow = (index: number, field: 'sets_quantity' | 'loose_quantity' | 'notes', value: any) => {
