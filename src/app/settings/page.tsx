@@ -30,19 +30,54 @@ import {
   Send,
   RefreshCw,
   Sliders,
-  Sun,
-  Moon,
-  Laptop
+  Sun, 
+  Moon, 
+  Laptop,
+  Boxes,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { getStoreSettingsAction, updateStoreSettingsAction } from '@/lib/actions/settings';
-import { StoreSettings } from '@/types/settings';
+import { StoreSettings, VariantTemplate, VariantTemplateItem } from '@/types/settings';
 import { 
   DEFAULT_WHATSAPP_INVOICE_TEMPLATE, 
   DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE, 
   formatWhatsAppMessage 
 } from '@/lib/whatsapp';
+
+const DEFAULT_VARIANT_TEMPLATES: VariantTemplate[] = [
+  { 
+    id: 'sizes-std', 
+    name: 'Standard Sizes', 
+    variants: [
+      { name: 'S', pieces_per_set: 1 },
+      { name: 'M', pieces_per_set: 1 },
+      { name: 'L', pieces_per_set: 1 },
+      { name: 'XL', pieces_per_set: 1 },
+      { name: 'XXL', pieces_per_set: 1 }
+    ] 
+  },
+  { 
+    id: 'kids-std', 
+    name: 'Kids Ages', 
+    variants: [
+      { name: '2', pieces_per_set: 1 },
+      { name: '4', pieces_per_set: 1 },
+      { name: '6', pieces_per_set: 1 },
+      { name: '8', pieces_per_set: 1 },
+      { name: '10', pieces_per_set: 1 }
+    ] 
+  }
+];
+
+const formatVariantItem = (item: VariantTemplateItem) => {
+  if (typeof item === 'string') return item;
+  const pps = item.pieces_per_set || 1;
+  return pps > 1 ? `${item.name} (${pps} pcs)` : item.name;
+};
+
 import { useTheme } from '@/components/theme/ThemeProvider';
 import toast from 'react-hot-toast';
 
@@ -95,6 +130,11 @@ export default function SettingsPage() {
   const [activeTemplateTab, setActiveTemplateTab] = useState<'invoice' | 'due'>('invoice');
   const [rightPreviewTab, setRightPreviewTab] = useState<'receipt' | 'whatsapp' | 'invoice'>('invoice');
 
+  // Variant Templates State
+  const [variantTemplates, setVariantTemplates] = useState<VariantTemplate[]>(DEFAULT_VARIANT_TEMPLATES);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateVariants, setNewTemplateVariants] = useState('');
+
   // Baseline Snapshot for Dirty Tracking & Discard
   const [initialData, setInitialData] = useState<StoreSettings | null>(null);
 
@@ -125,6 +165,10 @@ export default function SettingsPage() {
   // Compute isDirty
   const isDirty = useMemo(() => {
     if (!initialData) return false;
+    const initialTemplates = initialData.variant_templates !== undefined && initialData.variant_templates !== null
+      ? initialData.variant_templates
+      : DEFAULT_VARIANT_TEMPLATES;
+
     return (
       storeName !== (initialData.store_name || '') ||
       tagline !== (initialData.tagline || '') ||
@@ -135,9 +179,10 @@ export default function SettingsPage() {
       startHour !== (initialData.business_day_start_hour ?? 6) ||
       timezone !== (initialData.timezone || 'Asia/Kolkata') ||
       whatsappInvoiceTemplate !== (initialData.whatsapp_invoice_template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE) ||
-      whatsappDueReminderTemplate !== (initialData.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE)
+      whatsappDueReminderTemplate !== (initialData.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE) ||
+      JSON.stringify(variantTemplates) !== JSON.stringify(initialTemplates)
     );
-  }, [initialData, storeName, tagline, address, phone, email, gstin, startHour, timezone, whatsappInvoiceTemplate, whatsappDueReminderTemplate]);
+  }, [initialData, storeName, tagline, address, phone, email, gstin, startHour, timezone, whatsappInvoiceTemplate, whatsappDueReminderTemplate, variantTemplates]);
 
   // BeforeUnload Guard
   useEffect(() => {
@@ -168,6 +213,11 @@ export default function SettingsPage() {
         setTimezone(res.data.timezone || 'Asia/Kolkata');
         setWhatsappInvoiceTemplate(res.data.whatsapp_invoice_template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE);
         setWhatsappDueReminderTemplate(res.data.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE);
+        if (res.data.variant_templates !== undefined && res.data.variant_templates !== null) {
+          setVariantTemplates(res.data.variant_templates);
+        } else {
+          setVariantTemplates(DEFAULT_VARIANT_TEMPLATES);
+        }
         if (res.data.updated_at) {
           setLastSavedTime(new Date(res.data.updated_at).toLocaleTimeString('en-IN', {
             hour: '2-digit',
@@ -200,7 +250,61 @@ export default function SettingsPage() {
     setTimezone(initialData.timezone || 'Asia/Kolkata');
     setWhatsappInvoiceTemplate(initialData.whatsapp_invoice_template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE);
     setWhatsappDueReminderTemplate(initialData.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE);
+    setVariantTemplates(
+      initialData.variant_templates !== undefined && initialData.variant_templates !== null
+        ? initialData.variant_templates
+        : DEFAULT_VARIANT_TEMPLATES
+    );
     toast.success('Changes reverted to saved profile.');
+  };
+
+  const handleAddTemplate = () => {
+    if (!newTemplateName.trim() || !newTemplateVariants.trim()) {
+      toast.error('Template name and variant items are required.');
+      return;
+    }
+    const parsedVariants = newTemplateVariants
+      .split(/[,;\n]+/)
+      .map(item => item.trim())
+      .filter(item => item.length > 0)
+      .map(item => {
+        // 1-5:5 or 1-5: 5 pcs or 1-5 : 5
+        const colonMatch = item.match(/^(.+?)\s*:\s*(\d+)(?:\s*pcs)?$/i);
+        if (colonMatch) {
+          return { name: colonMatch[1].trim(), pieces_per_set: Math.max(1, parseInt(colonMatch[2], 10)) };
+        }
+        // 1-5(5) or 1-5 (5 pcs)
+        const parenMatch = item.match(/^(.+?)\s*\(\s*(\d+)(?:\s*pcs)?\s*\)$/i);
+        if (parenMatch) {
+          return { name: parenMatch[1].trim(), pieces_per_set: Math.max(1, parseInt(parenMatch[2], 10)) };
+        }
+        // 1-5 - 5 pcs
+        const dashMatch = item.match(/^(.+?)\s+-\s+(\d+)(?:\s*pcs)?$/i);
+        if (dashMatch) {
+          return { name: dashMatch[1].trim(), pieces_per_set: Math.max(1, parseInt(dashMatch[2], 10)) };
+        }
+        return { name: item, pieces_per_set: 1 };
+      });
+
+    if (parsedVariants.length === 0) {
+      toast.error('Please enter at least one valid variant.');
+      return;
+    }
+
+    const newTemplate: VariantTemplate = {
+      id: crypto.randomUUID(),
+      name: newTemplateName.trim(),
+      variants: parsedVariants
+    };
+
+    setVariantTemplates(prev => [...prev, newTemplate]);
+    setNewTemplateName('');
+    setNewTemplateVariants('');
+    toast.success(`Preset template "${newTemplate.name}" added! Click Save Settings to persist.`);
+  };
+
+  const handleRemoveTemplate = (id: string) => {
+    setVariantTemplates(prev => prev.filter(t => t.id !== id));
   };
 
   // Save Settings
@@ -235,7 +339,8 @@ export default function SettingsPage() {
         business_day_start_hour: startHour,
         timezone: timezone.trim() || 'Asia/Kolkata',
         whatsapp_invoice_template: whatsappInvoiceTemplate.trim() ? whatsappInvoiceTemplate.trim() : null,
-        whatsapp_due_reminder_template: whatsappDueReminderTemplate.trim() ? whatsappDueReminderTemplate.trim() : null
+        whatsapp_due_reminder_template: whatsappDueReminderTemplate.trim() ? whatsappDueReminderTemplate.trim() : null,
+        variant_templates: variantTemplates
       });
 
       if (res.success && res.data) {
@@ -636,6 +741,7 @@ export default function SettingsPage() {
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       { tag: '{customer_name}', label: 'Customer Name' },
+                      { tag: '{customer_phone}', label: 'Customer Phone' },
                       { tag: '{store_name}', label: 'Store Name' },
                       { tag: '{invoice_number}', label: 'Invoice #' },
                       { tag: '{date}', label: 'Date' },
@@ -645,6 +751,7 @@ export default function SettingsPage() {
                       { tag: '{due_amount}', label: 'Due Balance' },
                       { tag: '{status}', label: 'Status' },
                       { tag: '{store_phone}', label: 'Store Phone' },
+                      { tag: '{store_address}', label: 'Store Address' },
                     ].map((item) => (
                       <button
                         key={item.tag}
@@ -667,7 +774,103 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Card 4: Session & Security */}
+            {/* Card 4: Variant Preset Templates */}
+            <div className="bg-surface p-5 sm:p-6 rounded-2xl border border-border shadow-xs space-y-4">
+              <div className="flex items-center gap-3 border-b border-border pb-3.5">
+                <div className="p-2 bg-accent/10 text-accent rounded-xl">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-ink-primary">
+                    Variant Preset Templates
+                  </h2>
+                  <p className="text-xs text-ink-muted">
+                    Save reusable variant groups (e.g. Sizes, Colors, Age Groups) to auto-fill products with 1-click during product creation.
+                  </p>
+                </div>
+              </div>
+
+              {/* Existing Templates */}
+              <div className="space-y-2.5">
+                {variantTemplates.length === 0 ? (
+                  <p className="text-xs text-ink-muted italic p-3 bg-row-alt rounded-xl text-center">
+                    No custom variant templates saved yet. Create your first preset below.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {variantTemplates.map(tmpl => (
+                      <div key={tmpl.id} className="p-3 bg-row-alt rounded-xl border border-border flex flex-col justify-between space-y-2">
+                        <div className="flex items-center justify-between">
+                          <strong className="text-xs font-bold text-ink-primary">{tmpl.name}</strong>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTemplate(tmpl.id)}
+                            className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {tmpl.variants.map((v, i) => (
+                            <span key={i} className="text-[10px] font-bold bg-surface border border-border px-1.5 py-0.5 rounded text-ink-primary font-mono">
+                              {formatVariantItem(v)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Template Inline Form */}
+              <div className="p-3.5 bg-surface border border-dashed border-border rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <span className="text-xs font-bold text-ink-primary block">Add New Preset Template</span>
+                  <span className="text-[10px] text-ink-muted">
+                    Tip: Specify pack size with colon, e.g. <code className="font-bold text-accent">1-5:5, 6-10:5, 12-16:3</code>
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <input
+                    type="text"
+                    placeholder="Template Name (e.g. Kids Sets, Upper, Sizes)"
+                    value={newTemplateName}
+                    onChange={e => setNewTemplateName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTemplate();
+                      }
+                    }}
+                    className="p-2 text-xs bg-row-alt border border-border rounded-xl text-ink-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Variants (e.g. 1-5:5, 6-10:5, 12-16:3 or S, M, L, XL)"
+                    value={newTemplateVariants}
+                    onChange={e => setNewTemplateVariants(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTemplate();
+                      }
+                    }}
+                    className="p-2 text-xs bg-row-alt border border-border rounded-xl text-ink-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddTemplate}
+                  className="px-3 py-1.5 bg-accent/10 hover:bg-accent/20 text-accent text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Template</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Card 5: Session & Security */}
             <div className="bg-surface p-5 sm:p-6 rounded-2xl border border-border shadow-xs space-y-4">
               <div className="flex items-center gap-3 border-b border-border pb-3.5">
                 <div className="p-2 bg-emerald-50 text-emerald-700 rounded-xl">
@@ -769,6 +972,7 @@ export default function SettingsPage() {
                           activeTemplateTab === 'invoice' ? whatsappInvoiceTemplate : whatsappDueReminderTemplate,
                           {
                             customer_name: 'Ramesh Kumar',
+                            customer_phone: '+91 98765 43210',
                             store_name: storeName || 'MELBUN CLOTHING',
                             invoice_number: 'MELBUN/2026/000142',
                             date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),

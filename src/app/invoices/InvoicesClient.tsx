@@ -999,7 +999,7 @@ export default function InvoicesClient({
                       {(inspectInvoice.invoice_items || []).map((item: any) => {
                         const pName = item.variants?.products?.name || 'Product';
                         const vName = item.variants?.name || 'Variant';
-                        const piecesPerSet = item.variants?.products?.pieces_per_set || 1;
+                        const piecesPerSet = item.variants?.pieces_per_set || item.variants?.products?.pieces_per_set || 1;
                         const setsQty = item.sets_quantity || 0;
                         const looseQty = item.loose_quantity || (item.quantity - (setsQty * piecesPerSet));
                         const itemTotal = Number(item.quantity * item.selling_price_snapshot);

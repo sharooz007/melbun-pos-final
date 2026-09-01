@@ -18,7 +18,9 @@ import {
   Menu, 
   X,
   Sun,
-  Moon
+  Moon,
+  Truck,
+  Tag
 } from 'lucide-react';
 import { useTheme } from '@/components/theme/ThemeProvider';
 
@@ -26,6 +28,8 @@ const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'POS', href: '/pos', icon: ShoppingCart },
   { name: 'Invoices', href: '/invoices', icon: FileText },
+  { name: 'Line Sales', href: '/line-sales', icon: Truck },
+  { name: 'Price Menu', href: '/inventory/pricing', icon: Tag },
   { name: 'Inventory', href: '/inventory/products', icon: Package },
   { name: 'Customers', href: '/customers', icon: Users },
   { name: 'Expenses', href: '/expenses', icon: Receipt },
@@ -49,7 +53,7 @@ export default function Sidebar() {
     return () => window.removeEventListener('toggle-mobile-menu', handler);
   }, []);
 
-  if (pathname === '/login') return null;
+  if (pathname === '/pos' || pathname === '/login') return null;
 
   return (
     <>

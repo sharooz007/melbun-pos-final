@@ -28,7 +28,8 @@ import {
   Clock,
   ArrowRight,
   Percent,
-  Tag
+  Tag,
+  RotateCcw
 } from 'lucide-react';
 import { getReportsAction } from '@/lib/actions/reports';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
@@ -586,8 +587,8 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
-          {/* 2. 8 KPI BENTO CARDS (4 Columns) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {/* 2. 9 KPI BENTO CARDS */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4">
             {/* 1. Total Sales */}
             <div className="bg-surface p-4 sm:p-5 rounded-2xl border border-border shadow-xs flex flex-col justify-between">
               <div className="flex items-start justify-between">
@@ -624,7 +625,25 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* 3. Outstanding Dues */}
+            {/* 3. Total Returns */}
+            <div className="bg-surface p-4 sm:p-5 rounded-2xl border border-border shadow-xs flex flex-col justify-between">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-muted">Total Returns</span>
+                  <div className="text-lg sm:text-2xl font-extrabold text-rose-600 mt-1 font-mono">
+                    {formatINR(reportData?.total_returns)}
+                  </div>
+                  <span className="text-[11px] text-ink-muted mt-0.5 block">
+                    Period refunds issued
+                  </span>
+                </div>
+                <div className="p-2 bg-rose-50 text-rose-700 rounded-xl border border-rose-100">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Outstanding Dues */}
             <div className="bg-surface p-4 sm:p-5 rounded-2xl border border-border shadow-xs flex flex-col justify-between">
               <div className="flex items-start justify-between">
                 <div>
@@ -782,6 +801,24 @@ export default function ReportsPage() {
                 </div>
               </div>
 
+              {/* Bank Bar */}
+              <div>
+                <div className="flex justify-between text-xs font-semibold text-ink-primary mb-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Bank / Cheque Deposit
+                  </span>
+                  <span className="font-mono">
+                    {formatINR(reportData?.payment_breakdown?.bank_amount || 0)} · {reportData?.payment_breakdown?.bank_percent || 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-row-alt rounded-full h-2.5 overflow-hidden border border-border/50">
+                  <div 
+                    className="bg-blue-600 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${Math.min(100, Math.max(0, reportData?.payment_breakdown?.bank_percent || 0))}%` }}
+                  />
+                </div>
+              </div>
+
               {/* Store Credit Bar */}
               <div>
                 <div className="flex justify-between text-xs font-semibold text-ink-primary mb-1">
@@ -799,6 +836,19 @@ export default function ReportsPage() {
                   />
                 </div>
               </div>
+
+              {/* Pending Cheques Float */}
+              {Number(reportData?.payment_breakdown?.pending_cheques_amount || reportData?.pending_cheques_total || 0) > 0 && (
+                <div className="pt-2.5 border-t border-border flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 font-bold text-amber-800">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    <span>Uncleared Cheques Float (Awaiting Clearance)</span>
+                  </span>
+                  <span className="font-mono font-bold text-amber-900">
+                    {formatINR(reportData?.payment_breakdown?.pending_cheques_amount || reportData?.pending_cheques_total || 0)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -965,7 +1015,14 @@ export default function ReportsPage() {
                             <span className={`font-bold font-mono text-xs ${inv.is_voided ? 'line-through text-red-500' : 'text-ink-primary'}`}>
                               {inv.invoice_number}
                             </span>
-                            <p className="text-xs text-ink-primary font-semibold">{inv.customer_name}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-xs text-ink-primary font-semibold">{inv.customer_name}</p>
+                              {inv.is_line_sale && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                  Line Sale
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <span className={`font-bold font-mono text-sm ${inv.is_voided ? 'line-through text-red-500' : 'text-ink-primary'}`}>
                             {formatINR(inv.final_total)}
@@ -1298,7 +1355,16 @@ export default function ReportsPage() {
                                 <td className={`py-3 px-4 font-mono font-bold ${inv.is_voided ? 'line-through text-red-500' : 'text-ink-primary'}`}>
                                   {inv.invoice_number}
                                 </td>
-                                <td className="py-3 px-4 font-semibold text-ink-primary">{inv.customer_name}</td>
+                                <td className="py-3 px-4 font-semibold text-ink-primary">
+                                  <div className="flex items-center gap-1.5">
+                                    <span>{inv.customer_name}</span>
+                                    {inv.is_line_sale && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                        Line Sale
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="py-3 px-4 text-ink-muted font-mono">
                                   {new Date(inv.created_at).toLocaleString('en-IN', {
                                     day: '2-digit', month: 'short', year: 'numeric',

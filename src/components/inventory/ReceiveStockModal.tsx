@@ -27,6 +27,7 @@ interface VariantRowState {
   variant_id: string;
   variant_name: string;
   barcode?: string;
+  pieces_per_set: number;
   current_stock: number;
   current_sets: number;
   sets_quantity: number;
@@ -83,14 +84,16 @@ export function ReceiveStockModal({
     setIsSearchDropdownOpen(false);
 
     if (prod && prod.variants) {
-      const pps = Number(prod.pieces_per_set) || 1;
+      const masterPps = Number(prod.pieces_per_set) || 1;
       const initialRows: VariantRowState[] = prod.variants.map((v: any) => {
+        const vPps = Number(v.pieces_per_set) || masterPps;
         const totalPcs = Number(v.stock_quantity) || 0;
-        const totalSets = pps > 1 ? Math.floor(totalPcs / pps) : 0;
+        const totalSets = vPps > 1 ? Math.floor(totalPcs / vPps) : 0;
         return {
           variant_id: v.id,
           variant_name: v.name,
           barcode: v.barcode,
+          pieces_per_set: vPps,
           current_stock: totalPcs,
           current_sets: totalSets,
           sets_quantity: 0,
@@ -149,8 +152,9 @@ export function ReceiveStockModal({
   // Summary Metrics of Items Being Received
   const totalPiecesToAdd = useMemo(() => {
     if (!selectedProduct) return 0;
-    const pps = Number(selectedProduct.pieces_per_set) || 1;
+    const masterPps = Number(selectedProduct.pieces_per_set) || 1;
     return batchRows.reduce((sum, r) => {
+      const pps = Number(r.pieces_per_set) || masterPps;
       const sets = Math.max(0, Number(r.sets_quantity) || 0);
       const loose = Math.max(0, Number(r.loose_quantity) || 0);
       return sum + (sets * pps) + loose;

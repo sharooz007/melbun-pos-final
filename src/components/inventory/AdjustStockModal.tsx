@@ -12,7 +12,8 @@ import {
   Layers,
   ArrowRight,
   Info,
-  PackageCheck
+  PackageCheck,
+  Save
 } from 'lucide-react';
 import { adjustProductStockAction, restockProductVariantsAction } from '@/lib/actions/inventory';
 import toast from 'react-hot-toast';
@@ -25,6 +26,7 @@ interface VariantItem {
   selling_price: number | string;
   stock_quantity: number;
   stock_sets?: number;
+  pieces_per_set?: number;
 }
 
 interface ProductData {
@@ -76,7 +78,6 @@ export default function AdjustStockModal({
     if (!product || !isOpen) return;
 
     setError(null);
-    const piecesPerSet = Number(product.pieces_per_set || 1);
 
     // Init Adjust Rows with current on-hand quantities
     const initialAdjust: Record<string, { sets: string; loose: string }> = {};
@@ -90,9 +91,10 @@ export default function AdjustStockModal({
     }> = {};
 
     product.variants.forEach((v) => {
+      const vPps = Number(v.pieces_per_set || product.pieces_per_set || 1);
       const totalQty = Number(v.stock_quantity || 0);
-      const setsQty = v.stock_sets !== undefined ? Number(v.stock_sets) : Math.floor(totalQty / piecesPerSet);
-      const looseQty = Math.max(0, totalQty - (setsQty * piecesPerSet));
+      const setsQty = v.stock_sets !== undefined ? Number(v.stock_sets) : Math.floor(totalQty / vPps);
+      const looseQty = Math.max(0, totalQty - (setsQty * vPps));
       const currCost = Math.round(Number(v.cost_price || 0));
       const currSell = Math.round(Number(v.selling_price || 0));
 
@@ -233,11 +235,12 @@ export default function AdjustStockModal({
       if (field === 'addSets' || field === 'addLoose' || field === 'incomingCost') {
         if (!updatedRow.userCostOverridden) {
           const variant = product.variants.find(v => v.id === variantId);
+          const vPps = Number(variant?.pieces_per_set || product.pieces_per_set || 1);
           const currentPieces = Number(variant?.stock_quantity || 0);
           const currentCost = Math.round(Number(variant?.cost_price || 0));
           const addSets = parseInt(updatedRow.addSets || '0', 10) || 0;
           const addLoose = parseInt(updatedRow.addLoose || '0', 10) || 0;
-          const incomingPieces = (addSets * piecesPerSet) + addLoose;
+          const incomingPieces = (addSets * vPps) + addLoose;
           const incomingCost = parseInt(updatedRow.incomingCost || '0', 10) || currentCost;
 
           const mac = calculateMAC(currentPieces, currentCost, incomingPieces, incomingCost);
@@ -258,7 +261,6 @@ export default function AdjustStockModal({
     if (isSubmittingRef.current || loading) return;
 
     let hasAnyStockAdded = false;
-
     const restocks = product.variants.map((v) => {
       const row = restockRows[v.id] || {
         addSets: '0',
@@ -318,6 +320,9 @@ export default function AdjustStockModal({
     }
   };
 
+  const ppsList = product.variants.map(v => Number(v.pieces_per_set || product.pieces_per_set || 1));
+  const isMixedPps = new Set(ppsList).size > 1;
+
   return (
     <div 
       className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150 cursor-pointer"
@@ -337,7 +342,7 @@ export default function AdjustStockModal({
                 {product.name}
               </h2>
               <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-accent/10 text-accent border border-accent/20">
-                {piecesPerSet} pcs / set
+                {isMixedPps ? 'Mixed Pack Sizes' : `${product.variants[0]?.pieces_per_set || product.pieces_per_set || 1} pcs / set`}
               </span>
             </div>
             <p className="text-xs text-ink-muted mt-0.5">
@@ -399,13 +404,14 @@ export default function AdjustStockModal({
             <div className="space-y-3">
               {product.variants.map((v) => {
                 const row = adjustRows[v.id] || { sets: '0', loose: '0' };
+                const vPps = Number(v.pieces_per_set || product.pieces_per_set || 1);
                 const currentTotal = Number(v.stock_quantity || 0);
-                const currentSets = v.stock_sets !== undefined ? Number(v.stock_sets) : Math.floor(currentTotal / piecesPerSet);
-                const currentLoose = Math.max(0, currentTotal - (currentSets * piecesPerSet));
+                const currentSets = v.stock_sets !== undefined ? Number(v.stock_sets) : Math.floor(currentTotal / vPps);
+                const currentLoose = Math.max(0, currentTotal - (currentSets * vPps));
 
                 const newSets = parseInt(row.sets || '0', 10) || 0;
                 const newLoose = parseInt(row.loose || '0', 10) || 0;
-                const newTotal = (newSets * piecesPerSet) + newLoose;
+                const newTotal = (newSets * vPps) + newLoose;
                 const delta = newTotal - currentTotal;
 
                 return (
@@ -434,7 +440,7 @@ export default function AdjustStockModal({
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 items-center">
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-ink-muted mb-1">
-                          Sets ({piecesPerSet} pcs/set)
+                          Sets ({vPps} pcs/set)
                         </label>
                         <input
                           type="number"
@@ -459,12 +465,12 @@ export default function AdjustStockModal({
                       </div>
 
                       <div className="col-span-2 sm:col-span-1 bg-surface p-2 rounded-xl border border-border">
-                        <span className="block text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                        <span className="text-[10px] uppercase font-bold text-ink-muted block">
                           New Total
                         </span>
-                        <span className="font-mono font-extrabold text-sm text-accent">
+                        <div className="font-mono font-bold text-sm text-ink-primary mt-0.5">
                           {newTotal} pcs
-                        </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -472,53 +478,62 @@ export default function AdjustStockModal({
               })}
             </div>
 
-            {/* Adjustment Reason */}
-            <div className="space-y-2 pt-2 border-t border-border">
+            {/* Adjustment Reason Picker */}
+            <div className="bg-row-alt p-3.5 rounded-2xl border border-border space-y-2.5">
               <label className="block text-xs font-bold text-ink-primary">
-                Reason for Adjustment <span className="text-red-500">*</span>
+                Adjustment Reason <span className="text-red-500">*</span>
               </label>
-              <select
-                value={adjustReason}
-                onChange={(e) => setAdjustReason(e.target.value)}
-                className="w-full p-2.5 bg-surface border border-border rounded-xl text-xs font-medium text-ink-primary focus:ring-2 focus:ring-accent outline-none"
-              >
-                <option value="Physical stock count reconcile">Physical stock count reconcile</option>
-                <option value="Damaged / Scrap write-off">Damaged / Scrap write-off</option>
-                <option value="Inventory discrepancy correction">Inventory discrepancy correction</option>
-                <option value="Found uncounted stock">Found uncounted stock</option>
-                <option value="Other">Other (Custom note)</option>
-              </select>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  'Physical stock count reconcile',
+                  'Damaged / Lost during handling',
+                  'Stock correction / Data entry fix',
+                  'Other'
+                ].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setAdjustReason(r)}
+                    className={`p-2 rounded-xl text-left text-xs font-semibold border transition cursor-pointer ${
+                      adjustReason === r
+                        ? 'bg-accent/10 text-accent border-accent font-bold'
+                        : 'bg-surface text-ink-primary border-border hover:bg-row-alt'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
 
               {adjustReason === 'Other' && (
                 <input
                   type="text"
+                  placeholder="Specify reason for adjustment..."
                   value={customReason}
                   onChange={(e) => setCustomReason(e.target.value)}
-                  placeholder="Enter custom adjustment explanation..."
-                  className="w-full p-2.5 bg-surface border border-border rounded-xl text-xs text-ink-primary focus:ring-2 focus:ring-accent outline-none"
-                  required
+                  className="w-full p-2 bg-surface border border-border rounded-xl text-xs text-ink-primary focus:ring-2 focus:ring-accent outline-none mt-2"
                 />
               )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-2.5 pt-3 border-t border-border">
+            {/* Actions */}
+            <div className="flex gap-2 justify-end pt-3 border-t border-border">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={loading}
-                className="px-4 py-2.5 text-xs font-bold text-ink-muted hover:bg-row-alt rounded-xl transition cursor-pointer"
+                className="px-4 py-2 bg-surface hover:bg-row-alt border border-border text-ink-primary rounded-xl text-xs font-bold transition cursor-pointer"
               >
                 Cancel
               </button>
-
               <button
                 type="submit"
                 disabled={loading}
-                className="px-5 py-2.5 bg-accent hover:bg-accent-hover text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition cursor-pointer min-h-[40px]"
+                className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
               >
-                {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>Apply Manual Adjustment</span>
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                <span>Confirm Stock Adjustment</span>
               </button>
             </div>
           </form>
@@ -538,13 +553,14 @@ export default function AdjustStockModal({
                   userCostOverridden: false
                 };
 
+                const vPps = Number(v.pieces_per_set || product.pieces_per_set || 1);
                 const currentTotal = Number(v.stock_quantity || 0);
                 const currentCost = Math.round(Number(v.cost_price || 0));
                 const currentSell = Math.round(Number(v.selling_price || 0));
 
                 const addSets = parseInt(row.addSets || '0', 10) || 0;
                 const addLoose = parseInt(row.addLoose || '0', 10) || 0;
-                const incomingPieces = (addSets * piecesPerSet) + addLoose;
+                const incomingPieces = (addSets * vPps) + addLoose;
                 const incomingCost = parseInt(row.incomingCost || '0', 10) || currentCost;
 
                 const computedMAC = calculateMAC(currentTotal, currentCost, incomingPieces, incomingCost);
@@ -570,7 +586,7 @@ export default function AdjustStockModal({
                     <div className="grid grid-cols-2 gap-2.5">
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-ink-muted mb-1">
-                          + Add Sets ({piecesPerSet} pcs/set)
+                          + Add Sets ({vPps} pcs/set)
                         </label>
                         <input
                           type="number"

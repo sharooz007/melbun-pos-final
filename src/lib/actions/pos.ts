@@ -2,17 +2,18 @@
 
 import { createClient } from '@/lib/supabase/server'
 
-export async function searchVariantsAction(query: string) {
+export async function searchVariantsAction(query: string, staffId?: string | null) {
   const supabase = createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { success: false, error: 'Unauthorized' }
 
   const cleanQuery = query.trim()
-  if (!cleanQuery) return { success: true, data: [] }
+  if (!cleanQuery && !staffId) return { success: true, data: [] }
 
   const { data, error } = await supabase.rpc('search_pos_variants', {
-    p_query: cleanQuery
+    p_query: cleanQuery || '',
+    p_staff_id: staffId || null
   })
 
   if (error) {

@@ -8,6 +8,7 @@ import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from
 interface Category {
   id: string;
   name: string;
+  hsn_code?: string | null;
 }
 
 interface CategoriesModalProps {
@@ -19,11 +20,13 @@ interface CategoriesModalProps {
 export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModalProps) {
   const router = useRouter();
   const [newCat, setNewCat] = useState('');
+  const [newHsn, setNewHsn] = useState('');
   const [loading, setLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [editHsn, setEditHsn] = useState('');
 
   if (!isOpen) return null;
 
@@ -34,10 +37,11 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
     isSubmittingRef.current = true;
     setLoading(true);
     try {
-      const res = await createCategoryAction(newCat);
+      const res = await createCategoryAction(newCat, newHsn);
       if (res.success) {
         toast.success('Category added');
         setNewCat('');
+        setNewHsn('');
         router.refresh();
       } else {
         toast.error(res.error || 'Failed to add category');
@@ -53,6 +57,7 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
   const startEdit = (cat: Category) => {
     setEditingId(cat.id);
     setEditName(cat.name);
+    setEditHsn(cat.hsn_code || '');
   };
 
   const saveEdit = async () => {
@@ -60,7 +65,7 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
     isSubmittingRef.current = true;
     setLoading(true);
     try {
-      const res = await updateCategoryAction(editingId, editName);
+      const res = await updateCategoryAction(editingId, editName, editHsn);
       if (res.success) {
         toast.success('Category updated');
         setEditingId(null);
@@ -136,8 +141,15 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
                 type="text" 
                 value={newCat} 
                 onChange={e => setNewCat(e.target.value)} 
-                placeholder="e.g. Shirts, Pants, Jackets"
-                className="flex-1 p-2.5 bg-surface border border-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-accent focus:outline-none"
+                placeholder="Category Name"
+                className="flex-[2] p-2.5 bg-surface border border-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-accent focus:outline-none"
+              />
+              <input 
+                type="text" 
+                value={newHsn} 
+                onChange={e => setNewHsn(e.target.value)} 
+                placeholder="HSN Code"
+                className="flex-1 w-24 p-2.5 bg-surface border border-border rounded-xl text-xs font-semibold focus:ring-2 focus:ring-accent focus:outline-none"
               />
               <button 
                 type="submit" 
@@ -163,60 +175,54 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
                 </div>
               ) : (
                 categories.map(cat => (
-                  <div key={cat.id} className="flex items-center justify-between p-3 bg-surface hover:bg-row-alt/50 transition-colors">
+                  <div key={cat.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-surface hover:bg-row-alt/50 transition-colors gap-2">
                     {editingId === cat.id ? (
-                      <div className="flex items-center gap-2 flex-1">
+                      <div className="flex items-center gap-2 flex-1 w-full">
                         <input 
                           autoFocus
                           type="text" 
                           value={editName} 
                           onChange={e => setEditName(e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              saveEdit();
-                            } else if (e.key === 'Escape') {
-                              setEditingId(null);
-                            }
+                            if (e.key === 'Enter') { e.preventDefault(); saveEdit(); }
+                            else if (e.key === 'Escape') setEditingId(null);
                           }}
-                          className="flex-1 p-1.5 bg-row-alt border border-accent rounded-lg text-xs font-semibold outline-none"
+                          placeholder="Category Name"
+                          className="flex-[2] p-1.5 bg-row-alt border border-accent rounded-lg text-xs font-semibold outline-none"
                         />
-                        <button 
-                          type="button" 
-                          onClick={saveEdit} 
-                          disabled={loading} 
-                          className="text-emerald-600 hover:bg-emerald-50 p-1.5 rounded-lg transition"
-                        >
+                        <input 
+                          type="text" 
+                          value={editHsn} 
+                          onChange={e => setEditHsn(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); saveEdit(); }
+                            else if (e.key === 'Escape') setEditingId(null);
+                          }}
+                          placeholder="HSN"
+                          className="flex-1 w-20 p-1.5 bg-row-alt border border-accent rounded-lg text-xs font-semibold outline-none"
+                        />
+                        <button type="button" onClick={saveEdit} disabled={loading} className="text-emerald-600 hover:bg-emerald-50 p-1.5 rounded-lg transition shrink-0">
                           <Check className="w-4 h-4" />
                         </button>
-                        <button 
-                          type="button" 
-                          onClick={() => setEditingId(null)} 
-                          className="text-ink-muted hover:bg-row-alt p-1.5 rounded-lg transition"
-                        >
+                        <button type="button" onClick={() => setEditingId(null)} className="text-ink-muted hover:bg-row-alt p-1.5 rounded-lg transition shrink-0">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     ) : (
                       <>
-                        <span className="text-xs font-bold text-ink-primary">{cat.name}</span>
-                        {/* Always visible action buttons for mobile touch devices */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button 
-                            type="button" 
-                            onClick={() => startEdit(cat)} 
-                            className="text-ink-muted hover:text-accent p-1.5 hover:bg-row-alt rounded-lg transition"
-                            title="Edit Category"
-                          >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-ink-primary">{cat.name}</span>
+                          {cat.hsn_code && (
+                            <span className="text-[10px] bg-row-alt text-ink-muted px-2 py-0.5 rounded-full font-mono border border-border">
+                              HSN: {cat.hsn_code}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto mt-1 sm:mt-0">
+                          <button type="button" onClick={() => startEdit(cat)} className="text-ink-muted hover:text-accent p-1.5 hover:bg-row-alt rounded-lg transition" title="Edit Category">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button 
-                            type="button" 
-                            onClick={() => handleDelete(cat.id)} 
-                            disabled={loading} 
-                            className="text-ink-muted hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition"
-                            title="Delete Category"
-                          >
+                          <button type="button" onClick={() => handleDelete(cat.id)} disabled={loading} className="text-ink-muted hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition" title="Delete Category">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -231,11 +237,7 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
 
         {/* Footer */}
         <div className="p-4 bg-surface border-t border-border flex justify-end shrink-0">
-          <button 
-            type="button" 
-            onClick={onClose} 
-            className="px-5 py-2 bg-surface border border-border hover:bg-row-alt text-ink-primary font-bold rounded-xl transition text-xs shadow-2xs"
-          >
+          <button type="button" onClick={onClose} className="px-5 py-2 bg-surface border border-border hover:bg-row-alt text-ink-primary font-bold rounded-xl transition text-xs shadow-2xs">
             Done
           </button>
         </div>

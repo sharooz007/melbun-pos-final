@@ -87,23 +87,8 @@ export const generateInvoicePDF = (
   let currentY = margin;
 
   // ==========================================
-  // 1. LARGE BACKGROUND WATERMARK (10% Opacity)
-  // ==========================================
-  doc.saveGraphicsState();
-  (doc as any).setGState(new (doc as any).GState({ opacity: 0.10 }));
-  const wmWidth = 90;
-  const wmHeight = 106;
-  const wmX = (pageWidth - wmWidth) / 2;
-  const wmY = (pageHeight - wmHeight) / 2 + 10;
-  try {
-    doc.addImage(BRAND_ASSETS.watermarkBase64, 'PNG', wmX, wmY, wmWidth, wmHeight);
-  } catch (e) {
-    console.error('Failed to render background watermark image:', e);
-  }
-  doc.restoreGraphicsState();
-
-  // ==========================================
-  // 2. VOIDED WATERMARK & BANNER (If Voided)
+  // 1 & 2. VOIDED BANNER (If Voided)
+  // Watermarks moved to end of document to print on all pages
   // ==========================================
   if (invoice.is_voided) {
     doc.setFillColor(254, 226, 226);
@@ -119,18 +104,6 @@ export const generateInvoicePDF = (
     });
 
     currentY += 11;
-
-    // Diagonal Background Warning
-    doc.saveGraphicsState();
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(55);
-    doc.setTextColor(239, 68, 68);
-    doc.setGState(new (doc as any).GState({ opacity: 0.14 }));
-    doc.text('VOIDED', pageWidth / 2, pageHeight / 2, {
-      align: 'center',
-      angle: 45,
-    });
-    doc.restoreGraphicsState();
   }
 
   // ==========================================
@@ -168,7 +141,7 @@ export const generateInvoicePDF = (
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13.5);
   doc.setTextColor(...BRAND_PRIMARY);
-  doc.text(cleanAscii(store.storeName), centerStartX, headerStartY + 5);
+  doc.text(store.storeName, centerStartX, headerStartY + 5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
@@ -178,18 +151,18 @@ export const generateInvoicePDF = (
   
   // Format Address cleanly with splitTextToSize to avoid horizontal collision
   const fullAddress = [store.addressLine1, store.addressLine2].filter(Boolean).join(', ');
-  const splitStoreAddr = doc.splitTextToSize(`Loc: ${cleanAscii(fullAddress)}`, centerAvailableWidth);
+  const splitStoreAddr = doc.splitTextToSize(`Loc: ${fullAddress}`, centerAvailableWidth);
   doc.text(splitStoreAddr.slice(0, 2), centerStartX, profileY);
   profileY += (splitStoreAddr.slice(0, 2).length * 3.6) + 0.8;
 
-  doc.text(`Phone: ${cleanAscii(store.phone)}`, centerStartX, profileY);
+  doc.text(`Phone: ${store.phone}`, centerStartX, profileY);
   profileY += 3.6;
-  doc.text(`Email: ${cleanAscii(store.email || 'melbunindia@gmail.com')}`, centerStartX, profileY);
+  doc.text(`Email: ${store.email || 'melbunindia@gmail.com'}`, centerStartX, profileY);
   profileY += 3.6;
   
   // GSTIN & State Badge
   doc.setFont('helvetica', 'bold');
-  doc.text(`GSTIN: ${cleanAscii(store.gstin || 'N/A')}`, centerStartX, profileY);
+  doc.text(`GSTIN: ${store.gstin || 'N/A'}`, centerStartX, profileY);
   doc.setFont('helvetica', 'normal');
 
   const stateBadgeX = centerStartX + 46;
@@ -201,21 +174,22 @@ export const generateInvoicePDF = (
   doc.setFontSize(6.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...BRAND_PRIMARY);
-  doc.text(`State: ${cleanAscii(store.state || '32-Kerala')}`, stateBadgeX + 13, stateBadgeY + 3.2, { align: 'center' });
+  doc.text(`State: ${store.state || ''}`, stateBadgeX + 13, stateBadgeY + 3.2, { align: 'center' });
 
   // 3C. Right Column: Document Title & Geometric Line
-  const rightWidth = 55;
+  const isProforma = Boolean(invoice.is_proforma || invoice.invoice_number?.startsWith('LINE/') || options.fileName?.includes('Proforma'));
+  const rightWidth = isProforma ? 80 : 55;
   const rightX = pageWidth - margin - rightWidth;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15.5);
+  doc.setFontSize(isProforma ? 13.5 : 15.5);
   doc.setTextColor(...BRAND_PRIMARY);
-  const docTitle = invoice.gst_applied ? 'TAX INVOICE' : 'RETAIL INVOICE';
+  const docTitle = isProforma ? 'ROAD PROFORMA' : (invoice.gst_applied ? 'TAX INVOICE' : 'RETAIL INVOICE');
   doc.text(docTitle, pageWidth - margin, headerStartY + 6.5, { align: 'right' });
 
   // Clean geometric line under title
   doc.setDrawColor(...BRAND_PRIMARY);
   doc.setLineWidth(0.4);
-  doc.line(rightX + 15, headerStartY + 10, pageWidth - margin, headerStartY + 10);
+  doc.line(rightX + 5, headerStartY + 10, pageWidth - margin, headerStartY + 10);
 
   currentY = headerStartY + logoBoxHeight + 3.5;
 
@@ -228,12 +202,13 @@ export const generateInvoicePDF = (
   const cardHeaderHeight = 5.5;
 
   const customer = invoice.customers;
-  const customerName = cleanAscii(customer?.name || 'Walk-in Customer / Cash Sale');
-  const customerPhone = cleanAscii(customer?.phone ? `+91 ${customer.phone}` : 'Unregistered');
-  const customerAddress = cleanAscii(customer?.address || 'N/A');
-  const customerGstin = cleanAscii(customer?.gstin || 'N/A');
-  const customerState = customer?.state || (store.state || '32-Kerala');
-  const placeOfSupply = invoice.place_of_supply || customerState;
+  const isRegistered = Boolean(invoice.customer_id);
+  const customerName = invoice.shop_name || customer?.name || (isRegistered ? 'Registered Customer' : 'Walk-in Customer / Cash Sale');
+  const customerPhone = invoice.shop_phone ? `+91 ${invoice.shop_phone}` : (customer?.phone ? `+91 ${customer.phone}` : 'Unregistered');
+  const customerAddress = customer?.address || 'N/A';
+  const customerGstin = customer?.gstin || 'N/A';
+  const customerState = customer?.state || store.state || '';
+  const placeOfSupply = invoice.place_of_supply || customerState || 'N/A';
 
   // 4A. Left Card: BILL TO
   const leftCardX = margin;
@@ -248,7 +223,7 @@ export const generateInvoicePDF = (
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(255, 255, 255);
-  doc.text('BILL TO:', leftCardX + 3.5, currentY + 3.8);
+  doc.text(isProforma ? 'CONSIGNEE / SHOP DETAILS:' : 'BILL TO:', leftCardX + 3.5, currentY + 3.8);
 
   // Customer Body
   let custBodyY = currentY + cardHeaderHeight + 3.5;
@@ -285,7 +260,7 @@ export const generateInvoicePDF = (
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(255, 255, 255);
-  doc.text('INVOICE DETAILS:', rightCardX + 3.5, currentY + 3.8);
+  doc.text(isProforma ? 'PROFORMA DETAILS:' : 'INVOICE DETAILS:', rightCardX + 3.5, currentY + 3.8);
 
   // Details Body
   let invBodyY = currentY + cardHeaderHeight + 4;
@@ -325,7 +300,7 @@ export const generateInvoicePDF = (
   // ==========================================
   // 5. LINE ITEMS TABLE (Product Name - Variant Name)
   // ==========================================
-  const tableItems = invoice.invoice_items || [];
+  const tableItems = invoice.invoice_items || invoice.items || [];
   let totalPiecesCount = 0;
   let subtotalSum = 0;
 
@@ -334,21 +309,20 @@ export const generateInvoicePDF = (
     : [['#', 'Item Name', 'Quantity', 'Unit', 'Price / Unit (Rs.)', 'Amount (Rs.)']];
 
   const tableBody = tableItems.map((item: any, index: number) => {
-    const pName = item.variants?.products?.name || '';
-    const vName = item.variants?.name || '';
+    const pName = item.variants?.products?.name || item.product_name || '';
+    const vName = item.variants?.name || item.variant_name || item.name || '';
     
     // Format as Product Name - Variant Name (e.g. "5800 - 1-5" or "Shirt 015 - White")
     let itemName = 'Item';
     if (pName && vName && pName.trim().toLowerCase() !== vName.trim().toLowerCase()) {
       itemName = `${pName.trim()} - ${vName.trim()}`;
     } else {
-      itemName = pName.trim() || vName.trim() || 'Item';
+      itemName = pName.trim() || vName.trim() || item.name || 'Item';
     }
-    itemName = cleanAscii(itemName);
 
-    const hsn = cleanAscii(item.variants?.products?.categories?.hsn_code || '6109');
-    const unitPrice = Number(item.selling_price_snapshot || 0);
-    const qty = Number(item.quantity || 0);
+    const hsn = item.variants?.products?.categories?.hsn_code || item.hsn_code || '6109';
+    const unitPrice = Number(item.selling_price_snapshot ?? item.selling_price ?? item.price ?? 0);
+    const qty = Number(item.quantity ?? item.total_pieces ?? ((Number(item.sets_quantity || 0) * Number(item.pieces_per_set || 1)) + Number(item.loose_quantity || 0)));
     const lineTotal = unitPrice * qty;
 
     totalPiecesCount += qty;
@@ -439,8 +413,10 @@ export const generateInvoicePDF = (
   // ==========================================
   const totalPaid = (invoice.payments || []).reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
   const finalTotalNum = Number(invoice.final_total || 0);
+  const totalRefunds = (invoice.returns || []).reduce((acc: number, r: any) => acc + (Number(r.total_refund_amount) || 0), 0);
+  const effectiveTotal = Math.max(0, finalTotalNum - totalRefunds);
   const discountNum = Number(invoice.discount_amount || 0);
-  const balanceDue = invoice.is_voided ? 0 : Math.max(0, finalTotalNum - totalPaid);
+  const balanceDue = invoice.is_voided ? 0 : Math.max(0, effectiveTotal - totalPaid);
   const youSaved = discountNum;
 
   const splitSectionWidth = (contentWidth - 4) / 2;
@@ -452,9 +428,13 @@ export const generateInvoicePDF = (
   // 6A. LEFT COLUMN: TAX SUMMARY (When GST Enabled)
   if (invoice.gst_applied) {
     const hsnMap: Record<string, { taxable: number; cgst: number; sgst: number; totalTax: number }> = {};
+    const discountRatio = subtotalSum > 0 ? Math.max(0, subtotalSum - discountNum) / subtotalSum : 1;
+
     tableItems.forEach((item: any) => {
-      const hsn = cleanAscii(item.variants?.products?.categories?.hsn_code || '6109');
-      const itemSubtotal = Number(item.selling_price_snapshot || 0) * Number(item.quantity || 0);
+      const hsn = item.variants?.products?.categories?.hsn_code || item.hsn_code || '6109';
+      const rawSubtotal = Number(item.selling_price_snapshot ?? item.selling_price ?? item.price ?? 0) * Number(item.quantity ?? item.total_pieces ?? ((Number(item.sets_quantity || 0) * Number(item.pieces_per_set || 1)) + Number(item.loose_quantity || 0)));
+      
+      const itemSubtotal = rawSubtotal * discountRatio;
       const cgst = itemSubtotal * 0.025;
       const sgst = itemSubtotal * 0.025;
       const tax = cgst + sgst;
@@ -601,7 +581,7 @@ export const generateInvoicePDF = (
     printRightRow('Tax (5.0%)', formatCurrency(totalTaxAmt));
   }
 
-  if (Number(invoice.round_off) !== 0) {
+  if ((Number(invoice.round_off) || 0) !== 0) {
     const sign = Number(invoice.round_off) > 0 ? '+' : '';
     printRightRow('Round Off', `${sign}${formatCurrency(invoice.round_off)}`);
   }
@@ -629,8 +609,8 @@ export const generateInvoicePDF = (
   doc.setFontSize(6.2);
   doc.setTextColor(...TEXT_PRIMARY);
   const splitWords = doc.splitTextToSize(words, splitSectionWidth - 7);
-  doc.text(splitWords.slice(0, 2), rightColX + 3.5, rY);
-  rY += (splitWords.slice(0, 2).length * 3) + 2;
+  doc.text(splitWords, rightColX + 3.5, rY);
+  rY += (splitWords.length * 3) + 2;
 
   // Payment Breakdown
   printRightRow('Received', formatCurrency(totalPaid), true, SUCCESS_GREEN);
@@ -660,15 +640,22 @@ export const generateInvoicePDF = (
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(...BRAND_PRIMARY);
-  doc.text('TERMS AND CONDITIONS:', margin + 3.5, currentY + 3.8);
+  doc.text(isProforma ? 'TERMS AND TRANSIT NOTES:' : 'TERMS AND CONDITIONS:', margin + 3.5, currentY + 3.8);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.2);
   doc.setTextColor(...TEXT_MUTED);
-  doc.text('1. Returns will be accepted only in case of manufacturing defects.', margin + 3.5, currentY + 7.5);
-  doc.text('2. Any return request must be reported within 7 days from the billing date.', margin + 3.5, currentY + 11);
-  doc.text('3. Products must be returned with all original tags intact.', margin + 3.5, currentY + 14.5);
-  doc.text('4. Returned products must be in fresh and unused condition.', margin + 3.5, currentY + 18);
+  if (isProforma) {
+    doc.text('1. Road transit gate pass & proforma estimate for delivery van.', margin + 3.5, currentY + 7.5);
+    doc.text('2. Goods entrusted to authorized linesman for field distribution.', margin + 3.5, currentY + 11);
+    doc.text('3. Official tax invoice is issued upon customer delivery & payment confirmation.', margin + 3.5, currentY + 14.5);
+    doc.text('4. Unsold goods are returned to warehouse inventory upon route completion.', margin + 3.5, currentY + 18);
+  } else {
+    doc.text('1. Returns will be accepted only in case of manufacturing defects.', margin + 3.5, currentY + 7.5);
+    doc.text('2. Any return request must be reported within 7 days from the billing date.', margin + 3.5, currentY + 11);
+    doc.text('3. Products must be returned with all original tags intact.', margin + 3.5, currentY + 14.5);
+    doc.text('4. Returned products must be in fresh and unused condition.', margin + 3.5, currentY + 18);
+  }
 
   currentY += termsBoxHeight + 3.5;
 
@@ -687,7 +674,43 @@ export const generateInvoicePDF = (
   doc.text('Thank you for your business!', pageWidth / 2, footerY + 5.2, { align: 'center' });
 
   // ==========================================
-  // 9. DISPATCH ACTION
+  // 9. WATERMARKS ON ALL PAGES
+  // ==========================================
+  const totalPages = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    
+    // Background watermark
+    doc.saveGraphicsState();
+    (doc as any).setGState(new (doc as any).GState({ opacity: 0.10 }));
+    const wmWidth = 90;
+    const wmHeight = 106;
+    const wmX = (pageWidth - wmWidth) / 2;
+    const wmY = (pageHeight - wmHeight) / 2 + 10;
+    try {
+      doc.addImage(BRAND_ASSETS.watermarkBase64, 'PNG', wmX, wmY, wmWidth, wmHeight);
+    } catch (e) {
+      console.error('Failed to render background watermark image:', e);
+    }
+    doc.restoreGraphicsState();
+
+    // Diagonal Background Warning for Voided
+    if (invoice.is_voided) {
+      doc.saveGraphicsState();
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(55);
+      doc.setTextColor(239, 68, 68);
+      (doc as any).setGState(new (doc as any).GState({ opacity: 0.14 }));
+      doc.text('VOIDED', pageWidth / 2, pageHeight / 2, {
+        align: 'center',
+        angle: 45,
+      });
+      doc.restoreGraphicsState();
+    }
+  }
+
+  // ==========================================
+  // 10. DISPATCH ACTION
   // ==========================================
   const outputFileName = options.fileName || `Invoice_${invoice.invoice_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
 

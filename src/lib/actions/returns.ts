@@ -75,6 +75,7 @@ export async function lookupInvoiceAction(
             id, 
             name, 
             barcode,
+            pieces_per_set,
             products (id, name, pieces_per_set)
           ),
           returns (
@@ -192,6 +193,7 @@ export async function getRecentReturnsAction(
         variants (
           name, 
           barcode,
+            pieces_per_set,
           products (name, pieces_per_set)
         ),
         customers (name)

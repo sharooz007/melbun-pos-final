@@ -193,7 +193,7 @@ export default function ReturnsClient() {
       return;
     }
 
-    const piecesPerSet = item.variants?.products?.pieces_per_set || 1;
+    const piecesPerSet = item.variants?.pieces_per_set || item.variants?.products?.pieces_per_set || 1;
     const alreadyReturnedSets = item.returns?.reduce((sum, r) => sum + (r.sets_quantity || 0), 0) || 0;
     const itemSets = item.sets_quantity || 0;
     const maxAvailableSets = Math.max(0, itemSets - alreadyReturnedSets);
@@ -218,7 +218,7 @@ export default function ReturnsClient() {
   const handleConfirmReturn = async () => {
     if (isProcessingRef.current || submittingReturn || !selectedItem || !invoice) return;
 
-    const piecesPerSet = selectedItem.variants?.products?.pieces_per_set || 1;
+    const piecesPerSet = selectedItem.variants?.pieces_per_set || selectedItem.variants?.products?.pieces_per_set || 1;
     const alreadyReturnedTotal = selectedItem.returns?.reduce((sum, r) => sum + r.quantity, 0) || 0;
     const remainingPieces = selectedItem.quantity - alreadyReturnedTotal;
 
@@ -772,7 +772,7 @@ export default function ReturnsClient() {
 
             {/* Quantity Selector Section */}
             {(() => {
-              const piecesPerSet = selectedItem.variants?.products?.pieces_per_set || 1;
+              const piecesPerSet = selectedItem.variants?.pieces_per_set || selectedItem.variants?.products?.pieces_per_set || 1;
               const alreadyReturnedTotal = selectedItem.returns?.reduce((sum, r) => sum + r.quantity, 0) || 0;
               const remainingPieces = selectedItem.quantity - alreadyReturnedTotal;
 
@@ -871,35 +871,43 @@ export default function ReturnsClient() {
                         <span>Store Credit</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setRefundMethod('CASH')}
-                        className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition cursor-pointer ${
-                          refundMethod === 'CASH'
-                            ? 'bg-accent border-accent text-white shadow-xs'
-                            : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
-                        }`}
-                      >
-                        <IndianRupee className="w-3.5 h-3.5" />
-                        <span>Cash</span>
-                      </button>
+                      {(!invoice.customer_id) && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setRefundMethod('CASH')}
+                            className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition cursor-pointer ${
+                              refundMethod === 'CASH'
+                                ? 'bg-accent border-accent text-white shadow-xs'
+                                : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
+                            }`}
+                          >
+                            <IndianRupee className="w-3.5 h-3.5" />
+                            <span>Cash</span>
+                          </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setRefundMethod('UPI')}
-                        className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition cursor-pointer ${
-                          refundMethod === 'UPI'
-                            ? 'bg-accent border-accent text-white shadow-xs'
-                            : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
-                        }`}
-                      >
-                        <CreditCard className="w-3.5 h-3.5" />
-                        <span>UPI / Online</span>
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => setRefundMethod('UPI')}
+                            className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition cursor-pointer ${
+                              refundMethod === 'UPI'
+                                ? 'bg-accent border-accent text-white shadow-xs'
+                                : 'border-border bg-surface hover:bg-row-alt text-ink-primary'
+                            }`}
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>UPI / Online</span>
+                          </button>
+                        </>
+                      )}
                     </div>
-                    {!invoice.customer_id && (
+                    {!invoice.customer_id ? (
                       <p className="text-[10px] text-ink-muted mt-1">
                         * Store credit is only available for registered customer accounts.
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-emerald-700 font-medium mt-1">
+                        * Refunds for registered customers must be issued as Store Credit.
                       </p>
                     )}
                   </div>

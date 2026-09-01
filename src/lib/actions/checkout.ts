@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 const round2 = (num: number): number => Math.round((num + Number.EPSILON) * 100) / 100;
@@ -14,8 +15,14 @@ const checkoutItemSchema = z.object({
 
 const paymentItemSchema = z.object({
   amount: z.coerce.number().positive('Payment amount must be greater than 0'),
-  method: z.enum(['CASH', 'UPI', 'STORE_CREDIT'])
+  method: z.enum(['CASH', 'UPI', 'CHEQUE', 'STORE_CREDIT'])
 });
+
+const chequeDetailsSchema = z.object({
+  cheque_number: z.string().trim().min(1, 'Cheque number is required'),
+  bank_name: z.string().trim().min(1, 'Bank name is required'),
+  cheque_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Cheque date must be YYYY-MM-DD')
+}).optional().nullable();
 
 const baseCheckoutObjectSchema = z.object({
   customer_id: z
@@ -30,7 +37,9 @@ const baseCheckoutObjectSchema = z.object({
   final_total: z.coerce.number().min(0),
   items: z.array(checkoutItemSchema).min(1, 'Cart cannot be empty'),
   payments: z.array(paymentItemSchema).default([]),
-  created_at: z.string().datetime({ offset: true }).optional().nullable()
+  cheque_details: chequeDetailsSchema.default(null),
+  created_at: z.string().datetime({ offset: true }).optional().nullable(),
+  idempotency_key: z.string().uuid().optional().nullable()
 });
 
 const refineCheckoutData = (data: z.infer<typeof baseCheckoutObjectSchema>, ctx: z.RefinementCtx) => {
@@ -162,7 +171,9 @@ export async function processCheckoutAction(payload: unknown) {
         amount: round2(p.amount),
         method: p.method
       })),
-      p_created_at: parsed.data.created_at || null
+      p_created_at: parsed.data.created_at || null,
+      p_cheque_details: parsed.data.cheque_details || null,
+      p_idempotency_key: parsed.data.idempotency_key || null
     });
 
     if (error) {
@@ -172,6 +183,13 @@ export async function processCheckoutAction(payload: unknown) {
     if (!data || !data.invoice_id) {
       return { success: false, error: 'Failed to create invoice record in database.' };
     }
+
+    revalidatePath('/invoices');
+    revalidatePath('/inventory/products');
+    revalidatePath('/inventory/ledger');
+    revalidatePath('/customers');
+    revalidatePath('/reports');
+    revalidatePath('/dashboard');
 
     return { success: true, data };
   } catch (err: any) {
@@ -214,7 +232,8 @@ export async function updateFullInvoiceAction(payload: unknown) {
       p_payments: parsed.data.payments.map((p) => ({
         amount: round2(p.amount),
         method: p.method
-      }))
+      })),
+      p_cheque_details: parsed.data.cheque_details || null
     });
 
     if (error) {
@@ -224,6 +243,13 @@ export async function updateFullInvoiceAction(payload: unknown) {
     if (!data || !data.invoice_id) {
       return { success: false, error: 'Failed to update invoice record in database.' };
     }
+
+    revalidatePath('/invoices');
+    revalidatePath('/inventory/products');
+    revalidatePath('/inventory/ledger');
+    revalidatePath('/customers');
+    revalidatePath('/reports');
+    revalidatePath('/dashboard');
 
     return { success: true, data };
   } catch (err: any) {

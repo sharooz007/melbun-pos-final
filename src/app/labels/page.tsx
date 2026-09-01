@@ -21,6 +21,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { searchVariantsForLabelsAction } from '@/lib/actions/labels';
+import { getStoreSettingsAction } from '@/lib/actions/settings';
 import { LabelVariantItem, PrintQueueItem, LabelLayoutMode, LabelConfig } from '@/types/labels';
 import { BarcodeSvg } from '@/components/BarcodeSvg';
 
@@ -40,8 +41,12 @@ export default function LabelsPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  // State: Store settings for dynamic store name
+  const [storeSettings, setStoreSettings] = useState<any>(null);
+
   // State: Print Queue
   const [queue, setQueue] = useState<PrintQueueItem[]>([]);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // State: Layout & Dimensions
   const [layoutMode, setLayoutMode] = useState<LabelLayoutMode>('thermal-1col');
@@ -52,9 +57,10 @@ export default function LabelsPage() {
     showProductName: true,
     showVariantName: true,
     showPrice: true,
+    showPackSize: true,
     showBarcodeText: true,
     barcodeHeight: 34,
-    customHeader: 'MELBUN'
+    customHeader: ''
   });
 
   // Debounced search for variants
@@ -73,6 +79,18 @@ export default function LabelsPage() {
     } finally {
       setIsSearching(false);
     }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    getStoreSettingsAction().then((res) => {
+      if (mounted && res.success && res.data) {
+        setStoreSettings(res.data);
+      }
+    }).catch(() => {});
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -162,14 +180,15 @@ export default function LabelsPage() {
   const fillAllFromStock = () => {
     searchResults.forEach((variant) => {
       if (variant.stock_quantity > 0) {
+        const clampedQty = Math.min(variant.stock_quantity, 500);
         setQueue((prev) => {
           const existingIdx = prev.findIndex((item) => item.variant.variant_id === variant.variant_id);
           if (existingIdx >= 0) {
             const updated = [...prev];
-            updated[existingIdx] = { ...updated[existingIdx], quantity: variant.stock_quantity };
+            updated[existingIdx] = { ...updated[existingIdx], quantity: clampedQty };
             return updated;
           }
-          return [...prev, { variant, quantity: variant.stock_quantity }];
+          return [...prev, { variant, quantity: clampedQty }];
         });
       }
     });
@@ -202,7 +221,14 @@ export default function LabelsPage() {
 
   const handlePrint = () => {
     if (totalLabelCount === 0) return;
-    window.print();
+    setIsPrinting(true);
+    setTimeout(() => {
+      try {
+        window.print();
+      } finally {
+        setIsPrinting(false);
+      }
+    }, 150);
   };
 
   return (
@@ -465,6 +491,7 @@ export default function LabelsPage() {
                   { key: 'showProductName', label: 'Product Name' },
                   { key: 'showVariantName', label: 'Variant / Size' },
                   { key: 'showPrice', label: 'Selling Price (₹)' },
+                  { key: 'showPackSize', label: 'Pack Size (Pcs)' },
                   { key: 'showBarcodeText', label: 'Barcode Text' }
                 ].map((item) => (
                   <label
@@ -495,7 +522,7 @@ export default function LabelsPage() {
                   type="text"
                   value={config.customHeader || ''}
                   onChange={(e) => setConfig((prev) => ({ ...prev, customHeader: e.target.value }))}
-                  placeholder="e.g. MELBUN"
+                  placeholder={storeSettings?.store_name || 'MELBUN'}
                   className="w-full p-2 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-accent focus:border-accent font-medium"
                 />
               </div>
@@ -556,7 +583,7 @@ export default function LabelsPage() {
                   >
                     {config.showStoreName && (
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-gray-500 line-clamp-1 leading-tight">
-                        {config.customHeader || 'MELBUN'}
+                        {(config.customHeader || '').trim() || storeSettings?.store_name || 'MELBUN'}
                       </p>
                     )}
                     {config.showProductName && (
@@ -578,9 +605,10 @@ export default function LabelsPage() {
                       />
                     </div>
 
-                    {config.showPrice && (
+                    {(config.showPrice || config.showPackSize) && (
                       <p className="text-xs font-black text-black leading-none mt-0.5">
-                        MRP: {formatINR(variant.selling_price)}
+                        {config.showPrice ? `MRP: ${formatINR(variant.selling_price)}` : ''}
+                        {config.showPackSize && variant.pieces_per_set > 1 ? ` (Pack of ${variant.pieces_per_set})` : ''}
                       </p>
                     )}
                   </div>
@@ -599,7 +627,8 @@ export default function LabelsPage() {
       {/* ========================================================================= */}
       {/* 2. ISOLATED HARDWARE PRINT CONTAINER (PRINT MEDIA ONLY)                    */}
       {/* ========================================================================= */}
-      <div id="print-area" className="print-only">
+      {isPrinting && (
+        <div id="print-area" className="print-only">
         {layoutMode === 'a4-sheet' ? (
           <div className="print-a4-pages-container">
             {labelPages.map((pageLabels, pageIdx) => (
@@ -607,7 +636,9 @@ export default function LabelsPage() {
                 {pageLabels.map((variant, idx) => (
                   <div key={`print-a4-${variant.variant_id}-${pageIdx}-${idx}`} className="print-label-card">
                     {config.showStoreName && (
-                      <div className="label-store-name text-[9px] font-bold uppercase">{config.customHeader || 'MELBUN'}</div>
+                      <div className="label-store-name text-[9px] font-bold uppercase">
+                        {(config.customHeader || '').trim() || storeSettings?.store_name || 'MELBUN'}
+                      </div>
                     )}
                     {config.showProductName && (
                       <div className="label-title">{variant.product_name}</div>
@@ -622,9 +653,10 @@ export default function LabelsPage() {
                         showText={config.showBarcodeText}
                       />
                     </div>
-                    {config.showPrice && (
+                    {(config.showPrice || config.showPackSize) && (
                       <div className="label-price">
-                        MRP: {formatINR(variant.selling_price)}
+                        {config.showPrice ? `MRP: ${formatINR(variant.selling_price)}` : ''}
+                        {config.showPackSize && variant.pieces_per_set > 1 ? ` (Pack of ${variant.pieces_per_set})` : ''}
                       </div>
                     )}
                   </div>
@@ -637,7 +669,9 @@ export default function LabelsPage() {
             {flattenedLabels.map((variant, idx) => (
               <div key={`print-${variant.variant_id}-${idx}`} className="print-label-card">
                 {config.showStoreName && (
-                  <div className="label-store-name text-[9px] font-bold uppercase">{config.customHeader || 'MELBUN'}</div>
+                  <div className="label-store-name text-[9px] font-bold uppercase">
+                    {(config.customHeader || '').trim() || storeSettings?.store_name || 'MELBUN'}
+                  </div>
                 )}
                 {config.showProductName && (
                   <div className="label-title">{variant.product_name}</div>
@@ -652,9 +686,10 @@ export default function LabelsPage() {
                     showText={config.showBarcodeText}
                   />
                 </div>
-                {config.showPrice && (
+                {(config.showPrice || config.showPackSize) && (
                   <div className="label-price">
-                    MRP: {formatINR(variant.selling_price)}
+                    {config.showPrice ? `MRP: ${formatINR(variant.selling_price)}` : ''}
+                    {config.showPackSize && variant.pieces_per_set > 1 ? ` (Pack of ${variant.pieces_per_set})` : ''}
                   </div>
                 )}
               </div>
@@ -662,6 +697,7 @@ export default function LabelsPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3. CALIBRATED PRINT CSS ENGINE                                            */}

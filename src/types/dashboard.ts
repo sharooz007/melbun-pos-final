@@ -11,6 +11,8 @@ export interface DashboardMetrics {
   net_profit: number | null; // Null if user is STAFF
   collected_payments: number;
   invoice_count: number;
+  total_returns?: number;
+  pending_cheques_total?: number;
   low_stock_items: LowStockItem[];
 }
 

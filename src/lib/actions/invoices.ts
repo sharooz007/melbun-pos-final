@@ -340,7 +340,8 @@ export async function getFullInvoiceAction(id: string) {
           selling_price,
           stock_quantity,
           stock_sets,
-          products ( id, name, pieces_per_set, categories ( id, name ) )
+          pieces_per_set,
+          products ( id, name, pieces_per_set, categories ( id, name, hsn_code ) )
         ),
         returns (
           id,

@@ -1,7 +1,7 @@
 ---
 name: smartaudit
 description: >-
-  Omniscience & Chaos Edge-Case Deep Audit Skill. Mandates multi-agent end-to-end data pipeline tracing (Query ↔ Action ↔ Zod ↔ UI ↔ DB RPC), PostgreSQL migration and RPC overload verification, and exhaustive 20-case chaos edge-case simulation across checkout, returns, total editability, store credit, dual inventory, and financial reporting.
+  Omniscience & Chaos Edge-Case Deep Audit Skill. Mandates multi-agent end-to-end data pipeline tracing (Query ↔ Action ↔ Zod ↔ UI ↔ DB RPC), explicit Schema static-analysis via terminal search, PostgreSQL typecasting verification, and exhaustive chaos edge-case simulation.
 ---
 
 # SMARTAUDIT: OMNISCIENCE & CHAOS EDGE-CASE DEEP AUDIT PROTOCOL
@@ -13,81 +13,64 @@ You are strictly required to perform a **100% Read-Only, Deep End-to-End Audit**
 
 ---
 
-## 1. 🔍 END-TO-END DATA-FLOW TRACING (Query ↔ Action ↔ Zod ↔ UI ↔ RPC)
+## 1. ⚔️ ORTHOGONAL ADVERSARIAL AUDITING (MANDATORY SUBAGENTS)
 
-For every user flow and UI interaction, trace the EXACT data pipeline step-by-step:
-1. **Data Hydration / SELECT Inspection:**
-   - Inspect the exact SQL or Supabase `.select(...)` query string.
-   - Verify that **EVERY single column** needed by the UI components, calculation formulas, and mutation payloads is explicitly selected.
-   - Specifically check for foreign keys (e.g. `variant_id`), live warehouse quantities (`stock_quantity`, `stock_sets`), active prices (`selling_price`), and customer wallet balances (`credit_balance`).
-2. **TypeScript Type-Masking Check:**
-   - Identify any `(item: any)`, untyped mapping, or type assertions that could silently pass `undefined`, `null`, or `NaN` through compile-time type checking.
-3. **Zod Schema Invariant Verification:**
-   - Match client-submitted payloads against the server Action's Zod schema.
-   - Check every field constraint (`z.string().uuid()`, `z.number().min(0)`, bounds `[-50, 50]`, nullable vs optional).
-4. **PostgreSQL RPC Parameter Alignment:**
-   - Match Action payloads against PL/pgSQL function declarations.
-   - Verify all `jsonb_to_recordset` and `jsonb_array_elements` type casts match the database column types exactly.
+Do not attempt to audit the entire system yourself. You MUST spawn THREE parallel `DeepInvestigator` or `research` subagents using the `flash` model. Each subagent must be given one of the following hostile mandates:
 
----
+### Subagent 1: The Schema Purist (Static Analysis)
+- **Mandate:** Schema verification and pipeline integrity. Banned from evaluating business logic.
+- **Rule:** Do not trust memory. You MUST use `grep_search` or terminal commands to read the historical `supabase/migrations/` files.
+- **Task:** Verify every single table name, column name, relation, and ENUM string perfectly matches the exact definitions in the database. Ensure no phantom tables (e.g. `customer_credit_history` instead of `customer_credit_ledger`) exist in new SQL. Verify all `SELECT` and `JOIN` operations explicitly filter for `is_active = TRUE` to prevent ghost interactions with soft-deleted entities.
 
-## 2. 🗄️ POSTGRESQL MIGRATIONS, RPC OVERLOADS & SCHEMA PARITY
+### Subagent 2: The Runtime Hacker (Crash & Type Exploitation)
+- **Mandate:** Type-safety and execution crashes.
+- **Task:** Look exclusively for:
+  - JavaScript falsy/truthy bugs (`0 || finalTotal`).
+  - Missing TypeScript interface properties that Zod allows but TS rejects.
+  - PostgreSQL typecasting errors (e.g., `FLOOR(int/int)` crashing without `::numeric` casts).
+  - Function Parameter Shadowing (where an RPC accepts a parameter like `p_cgst_amount` but blindly overrides it with a hardcoded `ROUND()` calculation).
 
-1. **Function Signature & Overload Clashes:**
-   - Verify that any updated RPC explicitly drops previous function signatures (`DROP FUNCTION IF EXISTS ...`) to prevent PostgREST "function overload ambiguous match" errors.
-2. **Column Existence & Enum Casting:**
-   - Check every referenced table column (`products`, `variants`, `invoice_items`, `stock_movements`, `customer_credit_ledger`, `expenses`, `returns`, `customers`) against the latest database migrations.
-   - Verify that all custom ENUMs are explicitly cast (e.g. `'SALE'::stock_movement_type`, `'MANUAL_ADJUST'::credit_movement_type`, `'STORE_CREDIT'::payment_method`).
-3. **Transaction Boundaries & Concurrency Locks:**
-   - Verify deterministic row locking (`ORDER BY id FOR UPDATE`) on multi-row tables (`variants`, `customers`, `invoices`) to guarantee zero deadlocks and zero phantom stock under concurrent operations.
-4. **Live Aggregation (No Stale Rollups):**
-   - Confirm customer dues, store credit wallets, and financial reports execute live `SUM()`/`COUNT()` aggregations rather than relying on stale cached counters.
+### Subagent 3: The State & Math Validator (Chaos & Concurrency)
+- **Mandate:** Financial integrity, concurrency, and edge cases.
+- **Task:** Catch race conditions, bypasses in idempotency keys, missing pessimistic locks (`FOR UPDATE`), floating-point anomalies, and verify 1-cent exactness in financial math. 
 
 ---
 
-## 3. 🧪 COMPREHENSIVE 20-CASE DOMAIN & CHAOS EDGE-CASE MATRIX
+## 2. 🗄️ POSTGRESQL & RPC STRICT PARITY CHECKLIST
 
-Audit and report findings across all 20 specific edge cases:
+All SQL audits must explicitly check:
+1. **Idempotency Leaks:** Do ALL mutations (especially secondary checkout paths like `bill_line_staff_sales`) require and validate an `idempotency_key`?
+2. **Transaction Boundaries & Locks:** Are multi-row operations deterministically locked (`ORDER BY id FOR UPDATE`) to prevent deadlocks?
+3. **Atomic Returns:** Do updates to wallet balances or inventory rely on unsafe previous selects, or do they use atomic locking (e.g., `UPDATE ... RETURNING credit_balance INTO v_new`)?
 
-### A. Sales, Checkout & Money Flow Edge Cases
-* **CASE 1: 100% Discounted / Free Sale (Final Total = ₹0.00)** — Does checkout process smoothly with zero payment records without throwing division-by-zero or positive payment validation errors?
-* **CASE 2: Split Payment Imbalance** — Does the system strictly block submission if `Cash + UPI + Store Credit` does not exactly equal the bill total?
-* **CASE 3: Negative Tender Guard** — Does the POS strictly block negative values (`-50`) in cash, UPI, discount, or split payment inputs?
-* **CASE 4: Cash Overpayment Guard** — Does the POS block tendered cash greater than the bill total (`amountPaid <= finalTotal`)?
-* **CASE 5: Walk-In Customer Zero Credit Invariant (Policy 10)** — Does the system strictly block unlinked walk-in customers from having unpaid credit dues or partial credit?
+---
 
-### B. Invoice Lifecycle & Total Editability Edge Cases
-* **CASE 6: Full Invoice Re-ring & Stock Deltas** — When increasing item quantities on an edited bill, does the UI and backend accurately compute total available stock as `(Warehouse Shelf Stock + Items Held on This Invoice)`?
-* **CASE 7: Invoice Downward Total Adjustment (Policy 11)** — If a bill total decreases (e.g. ₹1000 → ₹800), does the system adjust payments cleanly without artificial ledger refund blockers?
-* **CASE 8: Customer Reassignment on Store Credit Invoices** — If Customer A originally paid via Store Credit and the invoice is reassigned to Customer B, does Customer A get their store credit refunded and Customer B get charged atomically?
-* **CASE 9: Return Integrity Guard** — Does the system strictly block editing line items of an invoice if returns already exist against that invoice?
-* **CASE 10: Voided / Deleted Invoice Protection** — Does the system strictly block editing voided or permanently deleted invoices?
+## 3. 🧪 COMPREHENSIVE CHAOS EDGE-CASE MATRIX
 
-### C. Returns, Voids & Undo-Void Edge Cases
-* **CASE 11: Return Excess Stock Restoration** — Does returning items restore packaged sets first and loose units second, logging accurate `RETURN_RESTOCK` or `RETURN_DAMAGE` movement entries?
-* **CASE 12: Undo Void Multi-Item Pre-Aggregation** — Does `undo_void_invoice` pre-aggregate multi-row variant quantities to prevent cumulative over-deductions?
-* **CASE 13: Walk-In vs Linked Customer Returns** — Do linked customer returns credit the customer's store credit wallet (`STORE_CREDIT`), while unlinked walk-in returns refund via Cash/UPI directly?
+Audit and report findings across these specific edge cases:
 
-### D. Dual-Inventory & Pack Size Mutability Edge Cases
-* **CASE 14: Pack Size Recalculation (Policy 2)** — When `pieces_per_set` is updated in catalog, does it preserve packaged sets, recalculate total pieces correctly, and log a `MANUAL_ADJUST` movement entry?
-* **CASE 15: Out of Packaged Sets Sale** — If packaged sets are 0 but loose stock exists, does adding to cart correctly default to loose units instead of sets?
+### A. Sales & Money Flow Edge Cases
+* **CASE 1: 100% Discounted / Free Sale (Final Total = ₹0.00)** — Does checkout process smoothly with zero payment records without throwing division-by-zero errors?
+* **CASE 2: Falsy Zero Payments** — If a user pays exactly ₹0 in Cash/UPI (e.g., fully store credit), does JS evaluate `0` as falsy and fallback to `finalTotal`?
+* **CASE 3: Negative Tender Guard** — Does the POS strictly block negative values (`-50`) in cash, discount, or split payments?
 
-### E. Reports, Analytics & Timezone Edge Cases
-* **CASE 16: Business Day Cutoff (e.g. 6 AM)** — Do daily and monthly sales/expense reports group transactions according to the configured store cutoff hour and timezone (`Asia/Kolkata`) rather than raw UTC midnight?
-* **CASE 17: Custom Date Range Boundaries** — Does custom date range reporting prevent `from > to` errors and display clear error toasts instead of crashing?
+### B. Invoice Lifecycle & Returns
+* **CASE 4: Full Invoice Re-ring & Stock Deltas** — When increasing item quantities on an edited bill, does the UI and backend accurately compute total available stock as `(Warehouse Shelf Stock + Items Held on This Invoice)`?
+* **CASE 5: Return Integrity Guard** — Does the system strictly block editing line items of an invoice if returns already exist against that invoice?
+* **CASE 6: Return Excess Stock Restoration** — Does returning items restore packaged sets first and loose units second, using exact mathematical limits (`LEAST()`, `GREATEST()`) to prevent ghost sets?
 
-### F. Hardware Scanner, Mobile & UI Ergonomics Edge Cases
-* **CASE 18: USB Scanner Race Condition** — Does hardware barcode scanning while typing in search or tender inputs prevent duplicate item additions or modal corruption?
-* **CASE 19: Double-Click / Multi-Touch Shield** — Do all action handlers utilize synchronous ref locks (`isSubmittingRef.current = true`) to prevent duplicated network submissions?
-* **CASE 20: Modal Escape & Backdrop Ergonomics** — Do all modals dismiss safely with the Escape key or outside click without interrupting in-flight operations?
+### C. UI Ergonomics & State Safety
+* **CASE 7: Double-Click / Multi-Touch Shield** — Do all action handlers utilize idempotency keys to prevent duplicated network submissions upon network retries?
+* **CASE 8: Modal Escape & Backdrop Ergonomics** — Do all modals dismiss safely with the Escape key or outside click without interrupting in-flight operations?
 
 ---
 
 ## 4. 📋 AUDIT REPORT STRUCTURE
 
-Your final output must be an exhaustive, structured report containing:
+Your final output must aggregate the findings of the three hostile subagents into an exhaustive, structured report containing:
 1. **Executive Scorecard Table** (Domain, Status, Findings Count).
-2. **End-to-End Pipeline Findings** (Query selections, Zod schemas, RPC signatures).
-3. **Edge-Case Matrix Verification** (Pass / Warning / Fail breakdown across Cases 1–20).
-4. **Actionable Recommendations** (Prioritized P0/P1/P2 checklist for fixes).
-5. **Strictly NO CODE MODIFICATIONS** in audit mode.
+2. **Schema & Static Analysis Exposes** (Reported by Schema Purist).
+3. **Runtime & Type Crashes** (Reported by Runtime Hacker).
+4. **Concurrency & Logic Anomalies** (Reported by State Validator).
+5. **Actionable Recommendations** (Prioritized checklist for fixes).
+6. **Strictly NO CODE MODIFICATIONS**.

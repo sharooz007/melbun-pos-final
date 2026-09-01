@@ -1,3 +1,11 @@
+export type VariantTemplateItem = string | { name: string; pieces_per_set?: number };
+
+export interface VariantTemplate {
+  id: string;
+  name: string;
+  variants: VariantTemplateItem[];
+}
+
 export interface StoreSettings {
   id: string;
   store_name: string;
@@ -10,6 +18,7 @@ export interface StoreSettings {
   timezone: string; // e.g. 'Asia/Kolkata'
   whatsapp_invoice_template?: string | null;
   whatsapp_due_reminder_template?: string | null;
+  variant_templates?: VariantTemplate[] | null;
   created_at: string;
   updated_at: string;
 }

@@ -283,6 +283,8 @@ export default function ExpensesClient() {
   };
 
   const handleDeleteCategory = async (catId: string) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     try {
       const res = await deleteExpenseCategoryAction(catId);
       if (res.success) {
@@ -292,6 +294,8 @@ export default function ExpensesClient() {
       }
     } catch (err: any) {
       setCategoryError(err?.message || 'Error deleting category');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 

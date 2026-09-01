@@ -49,6 +49,7 @@ const variantSchema = z.object({
     .nullable(),
   cost_price: z.coerce.number().min(0, 'Cost price must be non-negative'),
   selling_price: z.coerce.number().min(0, 'Selling price must be non-negative'),
+  pieces_per_set: z.coerce.number().int().min(1, 'Pack size must be at least 1').optional().nullable(),
   initial_sets: z.coerce.number().int().min(0, 'Initial sets cannot be negative').default(0),
   initial_loose: z.coerce.number().int().min(0, 'Initial loose pcs cannot be negative').default(0)
 });
@@ -200,6 +201,7 @@ export async function getStockLedgerAction(params?: GetStockLedgerParams) {
         id: r.variant_id,
         name: r.variant_name || 'Deleted Variant',
         barcode: r.variant_barcode || 'N/A',
+        pieces_per_set: r.pieces_per_set || 1,
         product: {
           id: r.product_id,
           name: r.product_name || 'Unknown Product',
@@ -233,7 +235,7 @@ export async function getProductStockHistoryAction(productId: string) {
   try {
     const parsedId = z.string().uuid().safeParse(productId);
     if (!parsedId.success) {
-      return { success: false, error: 'Invalid product ID format' };
+      return { success: false, error: 'Invalid product ID' };
     }
 
     const supabase = createClient();
@@ -249,6 +251,7 @@ export async function getProductStockHistoryAction(productId: string) {
           id,
           name,
           barcode,
+          pieces_per_set,
           product_id,
           product:products (
             id,

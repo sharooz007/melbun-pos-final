@@ -15,7 +15,20 @@ const updateSettingsSchema = z.object({
   business_day_start_hour: z.coerce.number().int().min(0, 'Start hour must be between 0 and 23').max(23, 'Start hour must be between 0 and 23').default(6),
   timezone: z.string().trim().min(1).default('Asia/Kolkata'),
   whatsapp_invoice_template: z.string().trim().max(2000).optional().nullable(),
-  whatsapp_due_reminder_template: z.string().trim().max(2000).optional().nullable()
+  whatsapp_due_reminder_template: z.string().trim().max(2000).optional().nullable(),
+  variant_templates: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    variants: z.array(
+      z.union([
+        z.string(),
+        z.object({
+          name: z.string(),
+          pieces_per_set: z.coerce.number().int().min(1).default(1)
+        })
+      ])
+    )
+  })).optional().nullable()
 });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
@@ -52,7 +65,8 @@ export async function updateStoreSettingsAction(payload: unknown): Promise<{ suc
       p_business_day_start_hour: parsed.data.business_day_start_hour,
       p_timezone: parsed.data.timezone,
       p_whatsapp_invoice_template: parsed.data.whatsapp_invoice_template || null,
-      p_whatsapp_due_reminder_template: parsed.data.whatsapp_due_reminder_template || null
+      p_whatsapp_due_reminder_template: parsed.data.whatsapp_due_reminder_template || null,
+      p_variant_templates: parsed.data.variant_templates || null
     });
 
     if (error) {

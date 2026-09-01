@@ -26,8 +26,9 @@ interface LedgerItem {
   variant: {
     id: string;
     name: string;
-    barcode: string;
-    product: {
+    barcode?: string;
+    pieces_per_set?: number;
+    product?: {
       id: string;
       name: string;
       pieces_per_set: number;
@@ -231,7 +232,7 @@ export default function LedgerClient({
                     item.quantity_change > 0 ? 'text-green-600' :
                     item.quantity_change < 0 ? 'text-red-600' : 'text-gray-500'
                   }`}>
-                    {formatDualQuantity(item.quantity_change, item.variant?.product?.pieces_per_set, { showSign: true })}
+                    {formatDualQuantity(item.quantity_change, item.variant?.pieces_per_set || item.variant?.product?.pieces_per_set, { showSign: true })}
                   </span>
                 </div>
 
@@ -349,7 +350,7 @@ export default function LedgerClient({
                       item.quantity_change > 0 ? 'text-green-600' :
                       item.quantity_change < 0 ? 'text-red-600' : 'text-gray-500'
                     }`}>
-                      {formatDualQuantity(item.quantity_change, item.variant?.product?.pieces_per_set, { showSign: true })}
+                      {formatDualQuantity(item.quantity_change, item.variant?.pieces_per_set || item.variant?.product?.pieces_per_set, { showSign: true })}
                     </td>
                     <td className="py-3 px-5 text-gray-600 max-w-xs truncate" title={item.notes || ''}>
                       {item.notes ? (() => {

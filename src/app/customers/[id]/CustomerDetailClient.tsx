@@ -25,6 +25,7 @@ import {
   reactivateCustomerAction,
   deactivateCustomerAction
 } from '@/lib/actions/customers';
+import { getCustomerChequesAction, clearCustomerChequeAction } from '@/lib/actions/cheques';
 import { voidInvoiceAction } from '@/lib/actions/invoices';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
 import { 
@@ -58,8 +59,9 @@ export default function CustomerDetailClient({ id }: { id: string }) {
   const [payments, setPayments] = useState<any[]>([]);
   const [returns, setReturns] = useState<any[]>([]);
   const [creditLedger, setCreditLedger] = useState<CreditLedgerEntry[]>([]);
+  const [cheques, setCheques] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'invoices' | 'payments' | 'returns' | 'credit'>('invoices');
+  const [activeTab, setActiveTab] = useState<'invoices' | 'payments' | 'returns' | 'credit' | 'cheques'>('invoices');
 
   // WhatsApp Prompt Modal State
   const [whatsappModal, setWhatsappModal] = useState<{
@@ -86,6 +88,13 @@ export default function CustomerDetailClient({ id }: { id: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
 
+  // Clear Cheque Modal State
+  const [selectedCheque, setSelectedCheque] = useState<any>(null);
+  const [isClearChequeModalOpen, setIsClearChequeModalOpen] = useState(false);
+  const [clearanceMethod, setClearanceMethod] = useState<'BANK' | 'CASH'>('BANK');
+  const [clearanceDate, setClearanceDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [clearanceNotes, setClearanceNotes] = useState<string>('');
+
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
@@ -100,12 +109,13 @@ export default function CustomerDetailClient({ id }: { id: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [custRes, invRes, payRes, retRes, credRes, settingsRes] = await Promise.all([
+      const [custRes, invRes, payRes, retRes, credRes, chqRes, settingsRes] = await Promise.all([
         getCustomerDetailsAction(id),
         getCustomerInvoicesAction(id),
         getCustomerPaymentsAction(id),
         getCustomerReturnsAction(id),
         getCustomerCreditLedgerAction(id),
+        getCustomerChequesAction(id),
         getStoreSettingsAction()
       ]);
       if (custRes.success) setCustomer(custRes.data);
@@ -113,6 +123,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
       setPayments(Array.isArray(payRes) ? payRes : []);
       setReturns(Array.isArray(retRes) ? retRes : []);
       if (credRes.success) setCreditLedger(credRes.data || []);
+      if (chqRes.success) setCheques(chqRes.data || []);
       if (settingsRes.success && settingsRes.data) setStoreSettings(settingsRes.data);
     } finally {
       setLoading(false);
@@ -123,12 +134,51 @@ export default function CustomerDetailClient({ id }: { id: string }) {
     load();
   }, [load]);
 
+  const handleOpenClearChequeModal = (ch: any) => {
+    setSelectedCheque(ch);
+    setClearanceMethod('BANK');
+    setClearanceDate(new Date().toISOString().split('T')[0]);
+    setClearanceNotes('');
+    setActionError('');
+    setIsClearChequeModalOpen(true);
+  };
+
+  const submitClearCheque = async () => {
+    if (!selectedCheque) return;
+    if (isSubmittingRef.current || actionLoading) return;
+    isSubmittingRef.current = true;
+    setActionLoading(true);
+    setActionError('');
+
+    try {
+      const res = await clearCustomerChequeAction({
+        chequeId: selectedCheque.id,
+        clearanceMethod,
+        clearanceDate: clearanceDate ? new Date(clearanceDate).toISOString() : new Date().toISOString(),
+        notes: clearanceNotes.trim() || null
+      });
+
+      if (res.success) {
+        toast.success(`Cheque #${selectedCheque.cheque_number} cleared successfully via ${clearanceMethod}!`);
+        setIsClearChequeModalOpen(false);
+        await load();
+      } else {
+        setActionError(res.error || 'Failed to clear cheque');
+      }
+    } catch (err: any) {
+      setActionError(err.message || 'Error clearing cheque');
+    } finally {
+      isSubmittingRef.current = false;
+      setActionLoading(false);
+    }
+  };
+
   const handleSendWhatsAppDueReminder = (inv?: any) => {
     const template = storeSettings?.whatsapp_due_reminder_template || DEFAULT_WHATSAPP_DUE_REMINDER_TEMPLATE;
     const dueAmt = inv ? Number(inv.due_amount || 0) : Number(customer?.pending_dues || 0);
     const invNum = inv ? inv.invoice_number : (invoices.find(i => Number(i.due_amount || 0) > 0)?.invoice_number || 'Multiple Dues');
-    const totalAmt = inv ? Number(inv.final_total || inv.total_amount || 0) : Number(customer?.total_spend || 0);
-    const paidAmt = inv ? Number(inv.paid_amount || 0) : Number(customer?.total_paid || 0);
+    const totalAmt = inv ? Number(inv.effective_final_total ?? inv.final_total ?? inv.total_amount ?? 0) : Number(customer?.total_spend || 0);
+    const paidAmt = inv ? Number(inv.amount_paid ?? inv.paid_amount ?? 0) : Number(customer?.total_paid || 0);
     const dateStr = inv ? new Date(inv.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleDateString('en-IN');
 
     const message = formatWhatsAppMessage(template, {
@@ -470,6 +520,23 @@ export default function CustomerDetailClient({ id }: { id: string }) {
           >
             Credit Ledger ({creditLedger.length})
           </button>
+          <button 
+            onClick={() => setActiveTab('cheques')} 
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap min-h-[38px] flex items-center gap-1.5 ${
+              activeTab === 'cheques' 
+                ? 'bg-blue-600 text-white shadow-xs' 
+                : 'bg-surface text-blue-700 border border-blue-200 hover:bg-blue-50'
+            }`}
+          >
+            Cheques ({cheques.length})
+            {cheques.filter(c => c.status === 'PENDING').length > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                activeTab === 'cheques' ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
+              }`}>
+                {cheques.filter(c => c.status === 'PENDING').length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Tab Content Directory */}
@@ -660,6 +727,72 @@ export default function CustomerDetailClient({ id }: { id: string }) {
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: CHEQUES */}
+          {activeTab === 'cheques' && (
+            <div className="divide-y divide-border">
+              {cheques.length === 0 ? (
+                <div className="p-8 text-center text-ink-muted text-xs">No cheques recorded for this customer.</div>
+              ) : (
+                cheques.map((ch: any) => {
+                  const isPending = ch.status === 'PENDING';
+                  return (
+                    <div key={ch.id} className={`p-3.5 sm:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${isPending ? 'bg-amber-50/20 hover:bg-amber-50/40' : 'hover:bg-row-alt/40'}`}>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs sm:text-sm text-ink-primary">
+                            Cheque #{ch.cheque_number}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            isPending 
+                              ? 'bg-amber-100 text-amber-800 border-amber-300' 
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}>
+                            {ch.status}
+                          </span>
+                          {ch.invoices?.invoice_number && (
+                            <span className="text-[11px] font-mono text-accent">
+                              {ch.invoices.invoice_number}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-ink-muted mt-1">
+                          Bank: <span className="font-semibold text-ink-primary">{ch.bank_name || 'N/A'}</span>
+                          {ch.cheque_date && <span> • Date on Cheque: {new Date(ch.cheque_date).toLocaleDateString('en-IN')}</span>}
+                        </div>
+                        {!isPending && ch.clearance_date && (
+                          <div className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                            Cleared on {new Date(ch.clearance_date).toLocaleDateString('en-IN')} via {ch.clearance_method}
+                            {ch.clearance_notes && ` (${ch.clearance_notes})`}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-border">
+                        <div className="text-left sm:text-right">
+                          <div className="font-bold font-mono text-xs sm:text-sm text-ink-primary">
+                            {formatINR(ch.amount)}
+                          </div>
+                          <div className="text-[10px] text-ink-muted">
+                            Recorded: {new Date(ch.created_at).toLocaleDateString('en-IN')}
+                          </div>
+                        </div>
+
+                        {isPending && (
+                          <button
+                            onClick={() => handleOpenClearChequeModal(ch)}
+                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                          >
+                            Mark Received / Settle
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           )}
@@ -1019,6 +1152,117 @@ export default function CustomerDetailClient({ id }: { id: string }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CLEAR CHEQUE MODAL with z-[200] */}
+      {isClearChequeModalOpen && selectedCheque && (
+        <div 
+          className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto cursor-pointer animate-in fade-in duration-150"
+          onClick={(e) => { if (e.target === e.currentTarget && !actionLoading) setIsClearChequeModalOpen(false); }}
+        >
+          <div 
+            className="bg-surface w-full max-w-md rounded-2xl shadow-2xl p-5 sm:p-6 border border-border animate-in zoom-in-95 duration-150 cursor-default space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <h2 className="text-base sm:text-lg font-bold text-ink-primary">Settle & Clear Cheque</h2>
+              <button 
+                onClick={() => setIsClearChequeModalOpen(false)} 
+                disabled={actionLoading}
+                className="p-1.5 text-ink-muted hover:text-ink-primary rounded-full hover:bg-row-alt"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 space-y-1">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-ink-muted">Cheque #{selectedCheque.cheque_number}</span>
+                <span className="font-mono font-bold text-ink-primary">{formatINR(selectedCheque.amount)}</span>
+              </div>
+              <p className="text-[11px] text-blue-800">
+                Bank: <span className="font-semibold">{selectedCheque.bank_name || 'N/A'}</span>
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-ink-primary mb-1">Clearance Deposit Method</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setClearanceMethod('BANK')}
+                    className={`py-2 rounded-xl text-xs font-bold transition border ${
+                      clearanceMethod === 'BANK'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-surface border-border text-ink-muted hover:bg-row-alt'
+                    }`}
+                  >
+                    Bank Transfer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClearanceMethod('CASH')}
+                    className={`py-2 rounded-xl text-xs font-bold transition border ${
+                      clearanceMethod === 'CASH'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-surface border-border text-ink-muted hover:bg-row-alt'
+                    }`}
+                  >
+                    Cash Collected
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-ink-primary mb-1">Clearance Date</label>
+                <input
+                  type="date"
+                  value={clearanceDate}
+                  onChange={e => setClearanceDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-row-alt border border-border rounded-xl text-xs text-ink-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-ink-primary mb-1">Notes (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Cleared via HDFC Account"
+                  value={clearanceNotes}
+                  onChange={e => setClearanceNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-row-alt border border-border rounded-xl text-xs text-ink-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+            </div>
+
+            {actionError && (
+              <div className="p-3 rounded-xl bg-red-50 text-red-600 text-xs font-medium border border-red-200">
+                {actionError}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearChequeModalOpen(false)}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl border border-border text-xs font-bold text-ink-muted hover:bg-row-alt transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitClearCheque}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-2"
+              >
+                {actionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {actionLoading ? 'Clearing...' : 'Confirm Clearance'}
+              </button>
+            </div>
           </div>
         </div>
       )}

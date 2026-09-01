@@ -23,6 +23,7 @@ export interface VariantDetail {
   id: string;
   name: string;
   barcode: string;
+  pieces_per_set?: number;
   products?: {
     id: string;
     name: string;

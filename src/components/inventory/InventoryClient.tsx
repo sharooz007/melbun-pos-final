@@ -330,6 +330,11 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
             const isExpanded = expandedProducts.has(p.id);
             const totalStock = Number(p.totalStock || 0);
             const categoryName = categories.find(c => c.id === p.category_id)?.name || 'Uncategorized';
+            const variantPpsList = p.variants?.map((v: any) => Number(v.pieces_per_set || p.pieces_per_set || 1)) || [];
+            const isMixedPps = new Set(variantPpsList).size > 1;
+            const totalSets = p.variants?.reduce((sum: number, v: any) => sum + Number(v.stock_sets || 0), 0) || 0;
+            const isOutOfStock = totalStock === 0;
+            const isLowStock = !isOutOfStock && totalStock <= 10;
 
             return (
               <div key={p.id} className="p-3.5 sm:p-4 hover:bg-row-alt/40 transition-colors">
@@ -364,7 +369,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                       <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-xs text-ink-muted mt-1.5">
                         <span className="inline-flex items-center gap-1 font-medium bg-row-alt px-2 py-0.5 rounded-md border border-border text-[11px]">
                           <Package className="w-3.5 h-3.5 text-ink-muted" />
-                          {p.pieces_per_set} pcs / set
+                          {isMixedPps ? 'Mixed Pack Sizes' : `${p.variants?.[0]?.pieces_per_set || p.pieces_per_set || 1} pcs / set`}
                         </span>
                         
                         <span className="font-medium text-[11px]">
@@ -373,23 +378,23 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
 
                         {/* Color-Coded Stock Status Pill */}
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${
-                          totalStock === 0
+                          isOutOfStock
                             ? 'bg-red-50 text-red-700 border-red-200'
-                            : totalStock <= 10
+                            : isLowStock
                             ? 'bg-amber-50 text-amber-800 border-amber-200'
                             : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         }`}>
-                          {totalStock === 0 
+                          {isOutOfStock 
                             ? 'Out of Stock' 
-                            : totalStock <= 10 
-                            ? `Low: ${formatDualQuantity(totalStock, p.pieces_per_set)}` 
-                            : `${formatDualQuantity(totalStock, p.pieces_per_set)} in stock`}
+                            : isLowStock 
+                            ? `Low: ${isMixedPps ? `${totalSets} sets (${totalStock} pcs)` : formatDualQuantity(totalStock, p.pieces_per_set)}` 
+                            : `${isMixedPps ? `${totalSets} sets (${totalStock} pcs)` : formatDualQuantity(totalStock, p.pieces_per_set)} in stock`}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Right: Tactile Action Chips (2x2 Grid on Mobile, Inline Flex on Desktop) */}
+                  {/* Right: Tactile Action Chips */}
                   <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
                     <button 
                       onClick={() => handleAdjustClick(p)}
@@ -439,15 +444,21 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                     {/* Mobile Card Layout (0px horizontal overflow) */}
                     <div className="block sm:hidden space-y-2">
                       {p.variants.map((v: any) => {
+                        const variantPps = Number(v.pieces_per_set || p.pieces_per_set || 1);
                         const stockSets = Number(v.stock_sets || 0);
-                        const loosePcs = Math.max(0, Number(v.stock_quantity || 0) - (stockSets * Number(p.pieces_per_set || 1)));
+                        const loosePcs = Math.max(0, Number(v.stock_quantity || 0) - (stockSets * variantPps));
                         const isLoss = Number(v.cost_price) > 0 && Number(v.selling_price) < Number(v.cost_price);
 
                         return (
                           <div key={v.id} className="p-3 bg-row-alt rounded-xl border border-border space-y-2">
                             <div className="flex justify-between items-start gap-2">
                               <div>
-                                <span className="font-bold text-xs text-ink-primary">{v.name}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-xs text-ink-primary">{v.name}</span>
+                                  <span className="text-[10px] text-ink-muted font-mono bg-surface border border-border px-1 rounded">
+                                    {variantPps} pcs/set
+                                  </span>
+                                </div>
                                 <div className="text-[11px] font-mono text-ink-muted flex items-center gap-1 mt-0.5">
                                   <Barcode className="w-3 h-3" />
                                   {v.barcode || 'No barcode'}
@@ -511,13 +522,21 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                         </thead>
                         <tbody className="divide-y divide-border">
                           {p.variants.map((v: any) => {
+                            const variantPps = Number(v.pieces_per_set || p.pieces_per_set || 1);
                             const stockSets = Number(v.stock_sets || 0);
-                            const loosePcs = Math.max(0, Number(v.stock_quantity || 0) - (stockSets * Number(p.pieces_per_set || 1)));
+                            const loosePcs = Math.max(0, Number(v.stock_quantity || 0) - (stockSets * variantPps));
                             const isLoss = Number(v.cost_price) > 0 && Number(v.selling_price) < Number(v.cost_price);
 
                             return (
                               <tr key={v.id} className="hover:bg-row-alt/50 transition-colors">
-                                <td className="py-2.5 px-3 font-semibold text-ink-primary">{v.name}</td>
+                                <td className="py-2.5 px-3 font-semibold text-ink-primary">
+                                  <div className="flex items-center gap-1.5">
+                                    <span>{v.name}</span>
+                                    <span className="text-[10px] text-ink-muted font-mono bg-row-alt border border-border px-1 py-0.5 rounded">
+                                      {variantPps} pcs/set
+                                    </span>
+                                  </div>
+                                </td>
                                 <td className="py-2.5 px-3 font-mono text-ink-muted">{v.barcode || '—'}</td>
                                 <td className="py-2.5 px-3 text-right font-mono text-ink-muted">{formatINR(v.cost_price)}</td>
                                 <td className="py-2.5 px-3 text-right font-mono font-bold text-ink-primary">
@@ -616,15 +635,29 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                   <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-lg font-bold text-ink-primary flex items-center gap-2">
-                    <span>{historyProduct.name}</span>
-                    <span className="text-xs px-2 py-0.5 rounded-md bg-row-alt border border-border font-normal text-ink-muted">
-                      {historyProduct.pieces_per_set} pcs/set
-                    </span>
-                  </h2>
-                  <p className="text-xs text-ink-muted">
-                    Total Live Stock: <strong className="font-mono text-ink-primary">{formatDualQuantity(historyProduct.totalStock, historyProduct.pieces_per_set)}</strong> across {historyProduct.variants.length} variant(s)
-                  </p>
+                  {(() => {
+                    const historyPpsList = historyProduct.variants?.map((v: any) => Number(v.pieces_per_set || historyProduct.pieces_per_set || 1)) || [];
+                    const isMixedHistoryPps = new Set(historyPpsList).size > 1;
+                    const historyTotalSets = historyProduct.variants?.reduce((sum: number, v: any) => sum + Number(v.stock_sets || 0), 0) || 0;
+
+                    return (
+                      <>
+                        <h2 className="text-base sm:text-lg font-bold text-ink-primary flex items-center gap-2">
+                          <span>{historyProduct.name}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-md bg-row-alt border border-border font-normal text-ink-muted">
+                            {isMixedHistoryPps ? 'Mixed Pack Sizes' : `${historyProduct.pieces_per_set} pcs/set`}
+                          </span>
+                        </h2>
+                        <p className="text-xs text-ink-muted">
+                          Total Live Stock: <strong className="font-mono text-ink-primary">
+                            {isMixedHistoryPps 
+                              ? `${historyTotalSets} sets (${historyProduct.totalStock} pcs)` 
+                              : formatDualQuantity(historyProduct.totalStock, historyProduct.pieces_per_set)}
+                          </strong> across {historyProduct.variants.length} variant(s)
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
               <button 
@@ -685,6 +718,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
               ) : (
                 filteredHistoryMovements.map((m: any) => {
                   const isPositive = Number(m.quantity_change) > 0;
+                  const movementPps = Number(m.variant?.pieces_per_set || historyProduct.pieces_per_set || 1);
 
                   // Dynamic Badge Styling
                   let badgeStyle = 'bg-gray-100 text-gray-800 border-gray-200';
@@ -726,7 +760,7 @@ export function InventoryClient({ variants, categories }: { variants: any[], cat
                         </div>
                         <div className="text-right font-mono">
                           <span className={`text-sm font-bold ${isPositive ? 'text-emerald-700' : 'text-red-600'}`}>
-                            {formatDualQuantity(m.quantity_change, historyProduct.pieces_per_set, { showSign: true })}
+                            {formatDualQuantity(m.quantity_change, movementPps, { showSign: true })}
                           </span>
                         </div>
                       </div>

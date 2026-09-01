@@ -1,6 +1,7 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react';
-import { PackagePlus, X, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { PackagePlus, X, Plus, Trash2, Loader2, AlertTriangle, Sparkles } from 'lucide-react';
+import { getStoreSettingsAction } from '@/lib/actions/settings';
 
 interface AddProductModalProps {
   isOpen: boolean;
@@ -13,31 +14,71 @@ interface AddProductModalProps {
 export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], initialData }: AddProductModalProps) {
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [piecesPerSet, setPiecesPerSet] = useState<number | ''>(1);
-  const [variants, setVariants] = useState<any[]>([{ name: '', barcode: '', cost_price: 0, selling_price: 0, initial_sets: '', initial_loose: '' }]);
+  const [variants, setVariants] = useState<any[]>([{ name: '', barcode: '', cost_price: 0, selling_price: 0, pieces_per_set: 1, initial_sets: '', initial_loose: '' }]);
+  const [presetTemplates, setPresetTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const prevIsOpenRef = useRef(false);
+  const isSubmittingRef = useRef(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      getStoreSettingsAction().then(res => {
+        if (res.success && res.data?.variant_templates && Array.isArray(res.data.variant_templates)) {
+          setPresetTemplates(res.data.variant_templates);
+        }
+      }).catch(() => {});
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       if (initialData) {
         setName(initialData.name || '');
         setCategoryId(initialData.category_id || (categories.length > 0 ? categories[0].id : ''));
-        setPiecesPerSet(initialData.pieces_per_set || 1);
-        setVariants(initialData.variants?.length ? initialData.variants.map((v: any) => ({ ...v, initial_sets: '', initial_loose: '' })) : [{ name: '', barcode: '', cost_price: 0, selling_price: 0, initial_sets: '', initial_loose: '' }]);
+        setVariants(
+          initialData.variants?.length 
+            ? initialData.variants.map((v: any) => ({ 
+                ...v, 
+                pieces_per_set: v.pieces_per_set || initialData.pieces_per_set || 1,
+                initial_sets: '', 
+                initial_loose: '' 
+              })) 
+            : [{ name: '', barcode: '', cost_price: 0, selling_price: 0, pieces_per_set: initialData.pieces_per_set || 1, initial_sets: '', initial_loose: '' }]
+        );
       } else {
         setName('');
         setCategoryId(categories.length > 0 ? categories[0].id : '');
-        setPiecesPerSet(1);
-        setVariants([{ name: '', barcode: '', cost_price: 0, selling_price: 0, initial_sets: '', initial_loose: '' }]);
+        setVariants([{ name: '', barcode: '', cost_price: 0, selling_price: 0, pieces_per_set: 1, initial_sets: '', initial_loose: '' }]);
       }
       setError('');
+      isSubmittingRef.current = false;
     }
     prevIsOpenRef.current = isOpen;
   }, [isOpen, initialData, categories]);
 
   if (!isOpen) return null;
+
+  const applyPresetTemplate = (template: any) => {
+    const baseCost = variants.length > 0 && variants[0].cost_price !== '' ? variants[0].cost_price : 0;
+    const baseSell = variants.length > 0 && variants[0].selling_price !== '' ? variants[0].selling_price : 0;
+
+    const newVariants = template.variants.map((item: any) => {
+      const varName = typeof item === 'string' ? item : item.name;
+      const varPps = typeof item === 'object' && item.pieces_per_set ? Math.max(1, Number(item.pieces_per_set)) : 1;
+      return {
+        name: varName,
+        barcode: '',
+        cost_price: baseCost,
+        selling_price: baseSell,
+        pieces_per_set: varPps,
+        initial_sets: '',
+        initial_loose: ''
+      };
+    });
+
+    setVariants(newVariants);
+  };
 
   const updateVariant = (index: number, field: string, value: any) => {
     const newVars = [...variants];
@@ -54,6 +95,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
         barcode: '',
         cost_price: prevVariant ? prevVariant.cost_price : 0,
         selling_price: prevVariant ? prevVariant.selling_price : 0,
+        pieces_per_set: prevVariant?.pieces_per_set || 1,
         initial_sets: prevVariant ? prevVariant.initial_sets : '',
         initial_loose: prevVariant ? prevVariant.initial_loose : ''
       }
@@ -75,7 +117,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading) return;
+    if (loading || isSubmittingRef.current) return;
     setError('');
 
     const lossVariants = variants.filter(v => {
@@ -92,18 +134,21 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
       if (!confirmed) return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
 
     try {
+      const defaultPps = variants.length > 0 && variants[0].pieces_per_set ? Math.max(1, Number(variants[0].pieces_per_set)) : 1;
       const payload = {
         name: name.trim(),
         category_id: categoryId || null,
-        pieces_per_set: piecesPerSet === '' ? 1 : Math.max(1, Number(piecesPerSet)),
+        pieces_per_set: defaultPps,
         variants: variants.map(v => ({
           ...v,
           name: v.name.trim(),
           cost_price: v.cost_price === '' ? 0 : Number(v.cost_price),
           selling_price: v.selling_price === '' ? 0 : Number(v.selling_price),
+          pieces_per_set: v.pieces_per_set === '' ? defaultPps : Math.max(1, Number(v.pieces_per_set)),
           initial_sets: v.id ? undefined : (v.initial_sets === '' ? 0 : Number(v.initial_sets)),
           initial_loose: v.id ? undefined : (v.initial_loose === '' ? 0 : Number(v.initial_loose))
         }))
@@ -114,6 +159,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
       setError(err.message || 'Failed to save product');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -137,7 +183,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
                 {initialData ? `Edit "${initialData.name}"` : 'Add New Product'}
               </h2>
               <p className="text-xs text-ink-muted mt-0.5">
-                {initialData ? 'Update pack size, prices, and variant options' : 'Create master product with multi-variant options'}
+                {initialData ? 'Update prices, pack sizes, and variant options' : 'Create master product with multi-variant options'}
               </p>
             </div>
           </div>
@@ -166,9 +212,9 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
                 Product Details
               </span>
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Product Name */}
-                <div className="sm:col-span-1">
+                <div>
                   <label className="block text-xs font-bold text-ink-primary mb-1">
                     Product Name <span className="text-red-500">*</span>
                   </label>
@@ -183,7 +229,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
                 </div>
 
                 {/* Category */}
-                <div className="sm:col-span-1">
+                <div>
                   <label className="block text-xs font-bold text-ink-primary mb-1">
                     Category <span className="text-red-500">*</span>
                   </label>
@@ -199,29 +245,37 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
                     ))}
                   </select>
                 </div>
-
-                {/* Pieces per Set */}
-                <div className="sm:col-span-1">
-                  <label className="block text-xs font-bold text-ink-primary mb-1">
-                    Pieces per Set <span className="text-red-500">*</span>
-                  </label>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    value={piecesPerSet} 
-                    onFocus={e => e.target.select()}
-                    onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                    onChange={e => setPiecesPerSet(e.target.value === '' ? '' : parseInt(e.target.value))} 
-                    required
-                    placeholder="e.g. 4"
-                    className="w-full bg-surface border border-border p-2.5 text-xs font-mono font-bold rounded-xl text-ink-primary focus:ring-2 focus:ring-accent focus:outline-none"
-                  />
-                </div>
               </div>
             </div>
 
             {/* Variants Section */}
             <div className="space-y-3">
+              {/* Quick Presets Bar */}
+              {presetTemplates.length > 0 && !initialData && (
+                <div className="p-3 bg-row-alt/80 rounded-xl border border-border space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-ink-primary">
+                    <Sparkles className="w-3.5 h-3.5 text-accent" />
+                    <span>Quick Load Variant Presets:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {presetTemplates.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => applyPresetTemplate(t)}
+                        className="px-2.5 py-1 bg-surface hover:bg-accent/10 hover:border-accent border border-border rounded-lg text-xs font-semibold text-ink-primary transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                      >
+                        <span className="text-accent font-bold">+</span>
+                        <span>{t.name}</span>
+                        <span className="text-[10px] text-ink-muted">
+                          ({t.variants.map((v: any) => typeof v === 'string' ? v : (v.pieces_per_set > 1 ? `${v.name}:${v.pieces_per_set}` : v.name)).join(', ')})
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-ink-muted block">
                   Product Variants ({variants.length})
@@ -229,7 +283,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
                 <button 
                   type="button" 
                   onClick={addVariant}
-                  className="px-3 py-1.5 bg-accent/10 hover:bg-accent/20 text-accent text-xs font-bold rounded-lg flex items-center gap-1 transition"
+                  className="px-3 py-1.5 bg-accent/10 hover:bg-accent/20 text-accent text-xs font-bold rounded-lg flex items-center gap-1 transition cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Variant</span>
@@ -248,7 +302,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
                           <button 
                             type="button" 
                             onClick={() => removeVariant(idx)} 
-                            className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition"
+                            className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -268,7 +322,30 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
                           />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-medium text-ink-muted mb-0.5" title="Pieces per Pack / Set">
+                              Pcs/Set {v.id && <span className="text-[9px] font-bold text-amber-700">(Locked)</span>}
+                            </label>
+                            <input 
+                              type="number" 
+                              min="1" 
+                              disabled={!!v.id}
+                              title={v.id ? "Pack size cannot be modified once created because this variant is in use." : "Pieces per set"}
+                              value={v.pieces_per_set} 
+                              onFocus={e => e.target.select()}
+                              onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                              onChange={e => updateVariant(idx, 'pieces_per_set', e.target.value === '' ? '' : parseInt(e.target.value))} 
+                              required
+                              placeholder="1"
+                              className={`w-full border p-2 text-xs font-mono font-bold text-center rounded-lg focus:outline-none ${
+                                v.id 
+                                  ? 'bg-gray-100/90 text-gray-500 border-gray-200 cursor-not-allowed' 
+                                  : 'bg-row-alt border-border text-ink-primary focus:ring-1 focus:ring-accent'
+                              }`}
+                            />
+                          </div>
+
                           <div>
                             <label className="block text-[11px] font-medium text-ink-muted mb-0.5">Cost Price</label>
                             <input 
@@ -366,6 +443,25 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
                           required
                           placeholder="Variant Name (e.g. Red / M)"
                           className="w-full bg-row-alt border border-border p-2 text-xs font-semibold rounded-lg text-ink-primary focus:ring-1 focus:ring-accent focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="w-20" title={v.id ? "Pack size cannot be modified once created because this variant is in use." : "Pack Size (Pieces per Set for this Variant)"}>
+                        <input 
+                          type="number" 
+                          min="1" 
+                          disabled={!!v.id}
+                          value={v.pieces_per_set} 
+                          onFocus={e => e.target.select()}
+                          onKeyDown={e => { if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
+                          onChange={e => updateVariant(idx, 'pieces_per_set', e.target.value === '' ? '' : parseInt(e.target.value))} 
+                          required
+                          placeholder="Pcs/Set"
+                          className={`w-full border p-2 text-xs font-mono font-bold text-center rounded-lg focus:outline-none ${
+                            v.id 
+                              ? 'bg-gray-100/90 text-gray-500 border-gray-200 cursor-not-allowed' 
+                              : 'bg-row-alt border-border text-ink-primary focus:ring-1 focus:ring-accent'
+                          }`}
                         />
                       </div>
 

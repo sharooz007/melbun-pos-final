@@ -22,6 +22,7 @@ export interface LabelConfig {
   showProductName: boolean;
   showVariantName: boolean;
   showPrice: boolean;
+  showPackSize?: boolean;
   showBarcodeText: boolean;
   barcodeHeight: number; // in pixels (24 to 48)
   customHeader: string;

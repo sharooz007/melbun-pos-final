@@ -85,11 +85,13 @@ export function formatWhatsAppMessage(template: string, data: WhatsAppTemplateDa
   const dueAmt = typeof data.due_amount === 'number' ? formatINR(data.due_amount) : (data.due_amount || '₹0.00');
   const statusStr = data.status?.trim() || 'Paid';
   const itemCountStr = data.item_count !== undefined && data.item_count !== null ? `${data.item_count} item(s)` : '1 item';
+  const customerPhone = data.customer_phone?.trim() || '';
   const storePhone = data.store_phone?.trim() || '';
   const storeAddress = data.store_address?.trim() || '';
 
   return (template || DEFAULT_WHATSAPP_INVOICE_TEMPLATE)
     .replace(/\{customer_name\}/g, customerName)
+    .replace(/\{customer_phone\}/g, customerPhone)
     .replace(/\{store_name\}/g, storeName)
     .replace(/\{invoice_number\}/g, invoiceNum)
     .replace(/\{date\}/g, dateStr)

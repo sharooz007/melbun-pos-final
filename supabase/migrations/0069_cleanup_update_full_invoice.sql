@@ -294,4 +294,44 @@ BEGIN
         v_line_cogs := ROUND(v_total_pieces * v_variant.cost_price, 2);
         v_line_profit := v_line_subtotal - v_line_cogs;
 
-        INSERT INTO invoice_items (\n            invoice_id, variant_id, quantity, sets_quantity, loose_quantity,\n            selling_price_snapshot, cost_price_snapshot, profit_snapshot, created_at\n        ) VALUES (\n            p_invoice_id, v_item.variant_id, v_total_pieces, v_item.sets_quantity, v_item.loose_quantity,\n            v_variant.selling_price, v_variant.cost_price, v_line_profit, v_invoice_created_at\n        ) RETURNING id INTO v_item_id;\n\n        UPDATE variants\n        SET stock_quantity = stock_quantity - v_total_pieces,\n            stock_sets = GREATEST(0, stock_sets - COALESCE(v_item.sets_quantity, 0)),\n            updated_at = NOW()\n        WHERE id = v_item.variant_id;\n\n        INSERT INTO stock_movements (invoice_item_id, variant_id, type, quantity_change, notes, created_at)\n        VALUES (v_item_id, v_item.variant_id, 'SALE'::stock_movement_type, -v_total_pieces, 'Sale: ' || v_invoice.invoice_number, v_invoice_created_at);\n    END LOOP;\n\n    -- 12. REPLACE PAYMENTS\n    DELETE FROM payments WHERE invoice_id = p_invoice_id;\n\n    IF p_payments IS NOT NULL AND jsonb_array_length(p_payments) > 0 THEN\n        FOR v_payment IN SELECT * FROM jsonb_to_recordset(p_payments) AS x(amount DECIMAL, method payment_method)\n        LOOP\n            IF v_payment.amount > 0 THEN\n                INSERT INTO payments (invoice_id, customer_id, amount, method, created_at)\n                VALUES (p_invoice_id, p_customer_id, v_payment.amount, v_payment.method, v_invoice_created_at);\n            END IF;\n        END LOOP;\n    END IF;\n\n    RETURN jsonb_build_object(\n        'success', true,\n        'invoice_id', p_invoice_id,\n        'invoice_number', v_invoice.invoice_number,\n        'final_total', p_final_total\n    );\nEND;\n$$;\n\nGRANT EXECUTE ON FUNCTION update_full_invoice(UUID, UUID, TIMESTAMPTZ, DECIMAL, DECIMAL, DECIMAL, BOOLEAN, DECIMAL, DECIMAL, DECIMAL, JSONB, JSONB) TO authenticated, service_role;\n
+        INSERT INTO invoice_items (
+            invoice_id, variant_id, quantity, sets_quantity, loose_quantity,
+            selling_price_snapshot, cost_price_snapshot, profit_snapshot, created_at
+        ) VALUES (
+            p_invoice_id, v_item.variant_id, v_total_pieces, v_item.sets_quantity, v_item.loose_quantity,
+            v_variant.selling_price, v_variant.cost_price, v_line_profit, v_invoice_created_at
+        ) RETURNING id INTO v_item_id;
+
+        UPDATE variants
+        SET stock_quantity = stock_quantity - v_total_pieces,
+            stock_sets = GREATEST(0, stock_sets - COALESCE(v_item.sets_quantity, 0)),
+            updated_at = NOW()
+        WHERE id = v_item.variant_id;
+
+        INSERT INTO stock_movements (invoice_item_id, variant_id, type, quantity_change, notes, created_at)
+        VALUES (v_item_id, v_item.variant_id, 'SALE'::stock_movement_type, -v_total_pieces, 'Sale: ' || v_invoice.invoice_number, v_invoice_created_at);
+    END LOOP;
+
+    -- 12. REPLACE PAYMENTS
+    DELETE FROM payments WHERE invoice_id = p_invoice_id;
+
+    IF p_payments IS NOT NULL AND jsonb_array_length(p_payments) > 0 THEN
+        FOR v_payment IN SELECT * FROM jsonb_to_recordset(p_payments) AS x(amount DECIMAL, method payment_method)
+        LOOP
+            IF v_payment.amount > 0 THEN
+                INSERT INTO payments (invoice_id, customer_id, amount, method, created_at)
+                VALUES (p_invoice_id, p_customer_id, v_payment.amount, v_payment.method, v_invoice_created_at);
+            END IF;
+        END LOOP;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'invoice_id', p_invoice_id,
+        'invoice_number', v_invoice.invoice_number,
+        'final_total', p_final_total
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION update_full_invoice(UUID, UUID, TIMESTAMPTZ, DECIMAL, DECIMAL, DECIMAL, BOOLEAN, DECIMAL, DECIMAL, DECIMAL, JSONB, JSONB) TO authenticated, service_role;

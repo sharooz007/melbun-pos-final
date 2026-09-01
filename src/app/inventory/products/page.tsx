@@ -18,7 +18,7 @@ export default async function InventoryPage() {
     supabase
       .from('variants')
       .select(`
-        id, product_id, name, barcode, cost_price, selling_price, stock_quantity, stock_sets, created_at,
+        id, product_id, name, barcode, cost_price, selling_price, stock_quantity, stock_sets, pieces_per_set, created_at,
         product:products!inner (id, name, category_id, pieces_per_set)
       `)
       .eq('is_active', true)

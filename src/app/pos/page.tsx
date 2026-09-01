@@ -26,13 +26,22 @@ import {
   Edit3,
   RotateCcw,
   ArrowLeft,
-  MessageSquare
+  MessageSquare,
+  FileText,
+  Truck,
+  FileCheck
 } from 'lucide-react';
+import Link from 'next/link';
 import CameraScanner from '@/components/lookup/CameraScanner';
 import { createClient } from '@/lib/supabase/client';
 import { searchVariantsAction } from '@/lib/actions/pos';
-import { checkoutSchema, updateFullInvoiceSchema } from '@/lib/actions/checkout';
+import { 
+  getLineStaffMemberAction, 
+  billLineStaffSalesAction, 
+  createLineDummyInvoiceAction 
+} from '@/lib/actions/line-sales';
 import { getCustomersListAction, getOrCreateCustomerAction } from '@/lib/actions/customers';
+import { processCheckoutAction, updateFullInvoiceAction } from '@/lib/actions/checkout';
 import { getFullInvoiceAction } from '@/lib/actions/invoices';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
 import { generateInvoicePDF } from '@/lib/pdf/generateInvoice';
@@ -64,6 +73,13 @@ function POSContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editInvoiceIdParam = searchParams.get('edit_invoice_id') || searchParams.get('editInvoiceId');
+  const lineStaffId = searchParams.get('line_staff_id');
+  const posMode = searchParams.get('mode'); // 'proforma' | 'line_sale'
+  const isLineMode = Boolean(lineStaffId);
+  const isProformaMode = isLineMode && posMode === 'proforma';
+
+  const [lineStaff, setLineStaff] = useState<any>(null);
+  const [lineStaffLoading, setLineStaffLoading] = useState(false);
 
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null);
   const [editInvoiceNumber, setEditInvoiceNumber] = useState<string | null>(null);
@@ -86,7 +102,10 @@ function POSContent() {
   const [discountValue, setDiscountValue] = useState<string>('');
   const [roundOff, setRoundOff] = useState<string>('');
   const [gstApplied, setGstApplied] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI' | 'CREDIT' | 'SPLIT' | 'STORE_CREDIT'>('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI' | 'CHEQUE' | 'CREDIT' | 'SPLIT' | 'STORE_CREDIT'>('CASH');
+  const [chequeNumber, setChequeNumber] = useState('');
+  const [chequeBankName, setChequeBankName] = useState('');
+  const [chequeDate, setChequeDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [splitCash, setSplitCash] = useState<string>('');
   const [splitUpi, setSplitUpi] = useState<string>('');
@@ -134,6 +153,35 @@ function POSContent() {
       }
     });
   }, []);
+
+  // Fetch Line Staff & Initial Van Catalog if in Line Mode
+  useEffect(() => {
+    if (!lineStaffId) return;
+    let isMounted = true;
+    setLineStaffLoading(true);
+    getLineStaffMemberAction(lineStaffId).then((res) => {
+      if (isMounted && res.success && res.data) {
+        setLineStaff(res.data);
+        if (res.data.customers?.id && !isProformaMode) {
+          setResolvedCustomerId(res.data.customers.id);
+          setCustomerName(res.data.customers.name || res.data.name);
+          setCustomerPhone(res.data.customers.phone || res.data.phone || '');
+          setCustomerCredit(Number(res.data.customers.credit_balance || 0));
+        }
+      }
+    }).finally(() => {
+      if (isMounted) setLineStaffLoading(false);
+    });
+
+    // Populate initial search results from van inventory
+    searchVariantsAction('', lineStaffId).then((res) => {
+      if (isMounted && res.success && res.data) {
+        setSearchResults(res.data);
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [lineStaffId, isProformaMode]);
 
   // WhatsApp Handler
   const handleSendWhatsAppReceipt = () => {
@@ -313,7 +361,7 @@ function POSContent() {
           if (inv.invoice_items && inv.invoice_items.length > 0) {
             const loadedCart: CartItem[] = inv.invoice_items.map((it: any) => {
               const variant = it.variants || {};
-              const pcsPerSet = it.pieces_per_set || variant.products?.pieces_per_set || 1;
+              const pcsPerSet = it.pieces_per_set || variant.pieces_per_set || variant.products?.pieces_per_set || 1;
               const resolvedVariantId = it.variant_id || variant.id;
               return {
                 variant_id: resolvedVariantId,
@@ -342,7 +390,7 @@ function POSContent() {
               if (p.method === 'STORE_CREDIT') {
                 setPaymentMethod('STORE_CREDIT');
                 setAmountPaidStr('');
-              } else if (p.method === 'UPI') {
+              } else if (p.method === 'UPI' || p.method === 'BANK') {
                 setPaymentMethod('UPI');
                 setAmountPaidStr(p.amount.toString());
               } else {
@@ -384,7 +432,7 @@ function POSContent() {
   const handleCameraScan = async (barcode: string) => {
     if (!barcode) return;
     try {
-      const res = await searchVariantsAction(barcode.trim());
+      const res = await searchVariantsAction(barcode.trim(), lineStaffId);
       if (res.success && res.data && res.data.length > 0) {
         const exact = res.data.find((v: any) => 
           (v.barcode && v.barcode.toLowerCase() === barcode.trim().toLowerCase()) ||
@@ -466,20 +514,21 @@ function POSContent() {
   };
 
   const isSubmittingRef = useRef(false);
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    if (!query.trim()) {
+    if (!query.trim() && !lineStaffId) {
       setSearchResults([]);
       setIsSearching(false);
       return;
     }
     setIsSearching(true);
     searchTimeoutRef.current = setTimeout(async () => {
-      const res = await searchVariantsAction(query);
+      const res = await searchVariantsAction(query, lineStaffId);
       if (res.success && res.data) {
         setSearchResults(res.data);
       }
@@ -491,7 +540,7 @@ function POSContent() {
     if (e.key === 'Enter') {
       e.preventDefault();
       const q = (e.currentTarget.value || searchQuery).trim();
-      if (!q) return;
+      if (!q && !lineStaffId) return;
 
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
       setSearchQuery('');
@@ -505,7 +554,7 @@ function POSContent() {
           return;
         }
 
-        const res = await searchVariantsAction(q);
+        const res = await searchVariantsAction(q, lineStaffId);
         if (res.success && res.data && res.data.length > 0) {
           const exact = res.data.find((v: any) => (v.barcode && v.barcode.toLowerCase() === q.toLowerCase()) || (v.sku && v.sku.toLowerCase() === q.toLowerCase()));
           if (exact) {
@@ -540,20 +589,30 @@ function POSContent() {
 
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-      if (isInput) return;
 
       const now = Date.now();
-      if (now - lastKeyTime > 150) {
-        scanBuffer = '';
-      }
+      const diff = now - lastKeyTime;
       lastKeyTime = now;
 
-      if (e.key === 'Enter') {
-        if (scanBuffer.length >= 3) {
+      // Reset buffer if keystroke is too slow for a hardware scanner
+      if (diff > 50) {
+        scanBuffer = e.key.length === 1 ? e.key : '';
+        if (isInput) return; // Allow normal typing
+      } else {
+        if (e.key.length === 1) scanBuffer += e.key;
+        if (isInput && scanBuffer.length > 1) {
           e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+
+      if (e.key === 'Enter') {
+        if (scanBuffer.length >= 3 && diff <= 50) {
+          e.preventDefault();
+          e.stopPropagation();
           const barcode = scanBuffer.trim();
           scanBuffer = '';
-          searchVariantsAction(barcode).then((res) => {
+          searchVariantsAction(barcode, lineStaffId).then((res) => {
             if (res.success && res.data && res.data.length > 0) {
               const exact = res.data.find((v: any) => (v.barcode && v.barcode.toLowerCase() === barcode.toLowerCase()) || (v.sku && v.sku.toLowerCase() === barcode.toLowerCase()));
               if (exact) {
@@ -565,15 +624,16 @@ function POSContent() {
               setStatus({ type: 'error', msg: `No product found matching barcode '${barcode}'` });
             }
           });
+        } else if (diff > 50) {
+           // Let Enter behave normally if it wasn't a scanner burst
+           scanBuffer = '';
         }
-      } else if (e.key.length === 1) {
-        scanBuffer += e.key;
       }
     };
 
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
+    window.addEventListener('keydown', handleGlobalKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true });
+  }, [lineStaffId]);
 
   // BeforeUnload Guard
   useEffect(() => {
@@ -783,20 +843,40 @@ function POSContent() {
   const handleDownloadPdf = async (invoiceId: string) => {
     try {
       setDownloadingPdf(true);
-      const [invRes, storeRes] = await Promise.all([
-        getFullInvoiceAction(invoiceId),
-        getStoreSettingsAction()
-      ]);
+      const storeRes = await getStoreSettingsAction();
+      const store = storeRes?.success && storeRes.data ? storeRes.data : null;
+      const storeConfig = store ? {
+        storeName: store.store_name || undefined,
+        tagline: store.tagline || undefined,
+        addressLine1: store.address || undefined,
+        phone: store.phone || undefined,
+        email: store.email || undefined,
+        gstin: store.gstin || undefined
+      } : undefined;
+
+      if (status?.invoiceNumber?.startsWith('LINE/') || isProformaMode) {
+        const supabase = createClient();
+        const { data: dummyInv } = await supabase
+          .from('line_dummy_invoices')
+          .select('*')
+          .eq('id', invoiceId)
+          .single();
+
+        if (dummyInv) {
+          generateInvoicePDF({
+            ...dummyInv,
+            is_proforma: true,
+            line_staff: lineStaff
+          }, { 
+            storeConfig,
+            fileName: `Road_Proforma_${dummyInv.invoice_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`
+          });
+          return;
+        }
+      }
+
+      const invRes = await getFullInvoiceAction(invoiceId);
       if (invRes.success && invRes.data) {
-        const store = storeRes?.success && storeRes.data ? storeRes.data : null;
-        const storeConfig = store ? {
-          storeName: store.store_name || undefined,
-          tagline: store.tagline || undefined,
-          addressLine1: store.address || undefined,
-          phone: store.phone || undefined,
-          email: store.email || undefined,
-          gstin: store.gstin || undefined
-        } : undefined;
         generateInvoicePDF(invRes.data, { storeConfig });
       } else {
         alert(invRes?.error || 'Failed to load invoice details for PDF.');
@@ -821,6 +901,9 @@ function POSContent() {
     setDiscountType('amount');
     setPaymentMethod('CASH');
     setAmountPaidStr('');
+    setChequeNumber('');
+    setChequeBankName('');
+    setChequeDate(new Date().toISOString().split('T')[0]);
     setSplitCash('');
     setSplitUpi('');
     setSplitCredit('');
@@ -876,23 +959,72 @@ function formatHumanReadableError(errorMsg: string): string {
       setLoading(true);
       setStatus(null);
 
-      const supabase = createClient();
+      // PROFORMA MODE: Direct dispatch to createLineDummyInvoiceAction (No cash or regular customer locks)
+      if (isProformaMode && lineStaffId) {
+        const proformaItems = validCart.map(i => ({
+          variant_id: i.variant_id,
+          variant_name: i.name,
+          sets_quantity: i.sets_quantity,
+          loose_quantity: i.loose_quantity,
+          selling_price: round2(i.price),
+          total_pieces: (i.sets_quantity * i.pieces_per_set) + i.loose_quantity
+        }));
 
-      // 1. Resolve Customer if name OR phone is provided
-      let finalCustomerId = resolvedCustomerId;
-      if (customerName.trim() || customerPhone.trim()) {
-        const { data: custData, error: custErr } = await supabase.rpc('get_or_create_customer', {
-          p_name: customerName.trim() || null,
-          p_phone: customerPhone.trim() || null
+        const res = await createLineDummyInvoiceAction({
+          staff_id: lineStaffId,
+          shop_name: customerName.trim() || 'Valued Shop',
+          shop_phone: customerPhone.trim() || null,
+          items: proformaItems,
+          subtotal: round2(subtotal),
+          discount_amount: round2(discountAmount),
+          round_off: round2(roundOffAmount),
+          final_total: round2(finalTotal),
+          notes: `Road Proforma issued to ${lineStaff?.name || 'Linesman'}`
         });
 
-        if (custErr || !custData || !custData.customer) {
-          setStatus({ type: 'error', msg: formatHumanReadableError(custErr?.message || 'Failed to save customer') });
+        if (!res.success || !res.data) {
+          setStatus({ type: 'error', msg: res.error || 'Failed to create road proforma invoice.' });
+        } else {
+          setIsMobileCheckoutOpen(false);
+          setStatus({
+            type: 'success',
+            msg: `Road Proforma #${res.data.invoice_number} created successfully!`,
+            invoiceId: res.data.id,
+            invoiceNumber: res.data.invoice_number
+          });
+          setLastCheckoutSummary({
+            customerName: customerName.trim() || 'Valued Shop',
+            customerPhone: customerPhone.trim() || undefined,
+            totalAmount: finalTotal,
+            paidAmount: 0,
+            dueAmount: finalTotal,
+            itemCount: validCart.length,
+            invoiceNumber: res.data.invoice_number,
+            invoiceId: res.data.id
+          });
+          resetFormState();
+        }
+        setLoading(false);
+        isSubmittingRef.current = false;
+        return;
+      }
+
+      // 1. Resolve Customer if name OR phone is provided
+      const supabase = createClient();
+      let finalCustomerId = resolvedCustomerId;
+      if (customerName.trim() || customerPhone.trim()) {
+        const res = await getOrCreateCustomerAction(
+          customerName.trim() || null,
+          customerPhone.trim() || null
+        );
+
+        if (!res.success || !res.customer) {
+          setStatus({ type: 'error', msg: res.error || 'Failed to save customer' });
           setLoading(false);
           isSubmittingRef.current = false;
           return;
         }
-        finalCustomerId = custData.customer.id;
+        finalCustomerId = res.customer.id;
         setResolvedCustomerId(finalCustomerId);
       }
 
@@ -908,8 +1040,28 @@ function formatHumanReadableError(errorMsg: string): string {
       let payments: { amount: number, method: 'CASH' | 'UPI' | 'STORE_CREDIT' }[] = [];
       const amountPaid = parseFloat(amountPaidStr) || 0;
 
+      const chequeDetails = paymentMethod === 'CHEQUE' && finalCustomerId ? {
+        cheque_number: chequeNumber.trim(),
+        bank_name: chequeBankName.trim(),
+        cheque_date: chequeDate
+      } : null;
+
       if (finalTotal === 0) {
         payments = [];
+      } else if (paymentMethod === 'CHEQUE') {
+        if (!finalCustomerId) {
+          setStatus({ type: 'error', msg: 'A customer must be selected to record a Cheque payment.' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        if (!chequeNumber.trim() || !chequeBankName.trim() || !chequeDate) {
+          setStatus({ type: 'error', msg: 'Cheque Number, Bank Name, and Cheque Date are required.' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        payments = []; // Cheque is recorded as pending in customer_cheques without immediate cash collection
       } else if (paymentMethod === 'SPLIT') {
         const cashAmt = parseFloat(splitCash) || 0;
         const upiAmt = parseFloat(splitUpi) || 0;
@@ -986,70 +1138,98 @@ function formatHumanReadableError(errorMsg: string): string {
         isoTimestamp = new Date(invoiceDateStr).toISOString();
       }
 
-      // Client-Side Zod Schema Validation Tier
-      const payloadToValidate = {
-        customer_id: finalCustomerId || null,
-        created_at: isoTimestamp,
-        subtotal: round2(subtotal),
-        discount_amount: round2(discountAmount),
-        round_off: round2(roundOffAmount),
-        gst_applied: gstApplied,
-        cgst_amount: round2(cgstAmount),
-        sgst_amount: round2(sgstAmount),
-        final_total: round2(finalTotal),
-        items: validCart.map(i => ({
+      // LINE SALE MODE: Settle line sales from van inventory
+      if (isLineMode && lineStaffId) {
+        const lineItems = validCart.map(i => ({
           variant_id: i.variant_id,
           sets_quantity: i.sets_quantity,
           loose_quantity: i.loose_quantity,
-          selling_price_snapshot: round2(i.price)
-        })),
-        payments: payments.map(p => ({
-          amount: round2(p.amount),
-          method: p.method
-        }))
-      };
+          selling_price: round2(i.price)
+        }));
 
-      const validation = editInvoiceId
-        ? updateFullInvoiceSchema.safeParse({ ...payloadToValidate, invoice_id: editInvoiceId })
-        : checkoutSchema.safeParse(payloadToValidate);
+        const linePayments = paymentMethod === 'SPLIT'
+          ? payments.map(p => ({ amount: p.amount, method: p.method }))
+          : (paymentMethod === 'CREDIT' || paymentMethod === 'CHEQUE'
+              ? []
+              : [{ amount: Number(amountPaid) > 0 ? Number(amountPaid) : finalTotal, method: paymentMethod as 'CASH' | 'UPI' | 'CARD' }]);
 
-      if (!validation.success) {
-        const errorMsg = validation.error.issues.map((i) => i.message).join('. ');
-        setStatus({ type: 'error', msg: errorMsg });
+        const res = await billLineStaffSalesAction({
+          staff_id: lineStaffId,
+          items: lineItems,
+          payments: linePayments,
+          discount_amount: round2(discountAmount),
+          round_off: round2(roundOffAmount),
+          gst_applied: gstApplied,
+          cgst_amount: gstApplied ? round2(cgstAmount) : 0,
+          sgst_amount: gstApplied ? round2(sgstAmount) : 0,
+          idempotency_key: idempotencyKeyRef.current,
+          notes: `Line Sale by ${lineStaff?.name || 'Staff'}`
+        });
+
+        if (!res.success || !res.data) {
+          setStatus({ type: 'error', msg: res.error || 'Failed to process line sale.' });
+        } else {
+          if (res.data.already_processed) {
+            console.log('Line Sale was already processed previously (Idempotent Hit)');
+          }
+          idempotencyKeyRef.current = crypto.randomUUID();
+          
+          const totalPaidAmt = linePayments.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
+          const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
+          setLastCheckoutSummary({
+            customerName: customerName || undefined,
+            customerPhone: customerPhone || undefined,
+            totalAmount: finalTotal,
+            paidAmount: totalPaidAmt,
+            dueAmount: pendingDueAmt,
+            itemCount: validCart.length,
+            invoiceNumber: res.data.invoice_number,
+            invoiceId: res.data.invoice_id
+          });
+
+          setIsMobileCheckoutOpen(false);
+          setStatus({
+            type: 'success',
+            msg: `Line Sale #${res.data.invoice_number} billed successfully!`,
+            invoiceId: res.data.invoice_id,
+            invoiceNumber: res.data.invoice_number
+          });
+          resetFormState();
+          router.refresh();
+        }
         setLoading(false);
         isSubmittingRef.current = false;
         return;
       }
 
       if (editInvoiceId) {
-        // EXECUTE FULL INVOICE UPDATE DIRECTLY VIA CLIENT
-        const { data: editData, error: editErr } = await supabase.rpc('update_full_invoice', {
-          p_invoice_id: editInvoiceId,
-          p_customer_id: finalCustomerId || null,
-          p_created_at: isoTimestamp,
-          p_subtotal: round2(subtotal),
-          p_discount_amount: round2(discountAmount),
-          p_round_off: round2(roundOffAmount),
-          p_gst_applied: gstApplied,
-          p_cgst_amount: round2(cgstAmount),
-          p_sgst_amount: round2(sgstAmount),
-          p_final_total: round2(finalTotal),
-          p_items: validCart.map(i => ({
+        // EXECUTE FULL INVOICE UPDATE VIA SERVER ACTION
+        const res = await updateFullInvoiceAction({
+          invoice_id: editInvoiceId,
+          customer_id: finalCustomerId || null,
+          created_at: isoTimestamp,
+          subtotal: round2(subtotal),
+          discount_amount: round2(discountAmount),
+          round_off: round2(roundOffAmount),
+          gst_applied: gstApplied,
+          cgst_amount: round2(cgstAmount),
+          sgst_amount: round2(sgstAmount),
+          final_total: round2(finalTotal),
+          items: validCart.map(i => ({
             variant_id: i.variant_id,
             sets_quantity: i.sets_quantity,
             loose_quantity: i.loose_quantity,
-            selling_price: round2(i.price)
+            selling_price_snapshot: round2(i.price)
           })),
-          p_payments: payments.map(p => ({
+          payments: payments.map(p => ({
             amount: round2(p.amount),
             method: p.method
-          }))
+          })),
+          cheque_details: chequeDetails
         });
 
-        if (editErr) {
-          setStatus({ type: 'error', msg: formatHumanReadableError(editErr.message) });
-        } else if (!editData || !editData.invoice_id) {
-          setStatus({ type: 'error', msg: 'Failed to update invoice in database.' });
+        if (!res.success) {
+          setStatus({ type: 'error', msg: res.error || 'Failed to update invoice in database.' });
         } else {
           const totalPaidAmt = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
           const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
@@ -1075,34 +1255,40 @@ function formatHumanReadableError(errorMsg: string): string {
           router.refresh();
         }
       } else {
-        // EXECUTE NEW CHECKOUT DIRECTLY VIA CLIENT
-        const { data: checkData, error: checkErr } = await supabase.rpc('process_checkout', {
-          p_customer_id: finalCustomerId || null,
-          p_subtotal: round2(subtotal),
-          p_discount_amount: round2(discountAmount),
-          p_round_off: round2(roundOffAmount),
-          p_gst_applied: gstApplied,
-          p_cgst_amount: round2(cgstAmount),
-          p_sgst_amount: round2(sgstAmount),
-          p_final_total: round2(finalTotal),
-          p_items: validCart.map(i => ({
+        // EXECUTE NEW CHECKOUT VIA SERVER ACTION
+        const res = await processCheckoutAction({
+          customer_id: finalCustomerId || null,
+          subtotal: round2(subtotal),
+          discount_amount: round2(discountAmount),
+          round_off: round2(roundOffAmount),
+          gst_applied: gstApplied,
+          cgst_amount: round2(cgstAmount),
+          sgst_amount: round2(sgstAmount),
+          final_total: round2(finalTotal),
+          items: validCart.map(i => ({
             variant_id: i.variant_id,
             sets_quantity: i.sets_quantity,
             loose_quantity: i.loose_quantity,
-            selling_price: round2(i.price)
+            selling_price_snapshot: round2(i.price)
           })),
-          p_payments: payments.map(p => ({
+          payments: payments.map(p => ({
             amount: round2(p.amount),
             method: p.method
           })),
-          p_created_at: isoTimestamp
+          created_at: isoTimestamp,
+          cheque_details: chequeDetails,
+          idempotency_key: idempotencyKeyRef.current
         });
 
-        if (checkErr) {
-          setStatus({ type: 'error', msg: formatHumanReadableError(checkErr.message) });
-        } else if (!checkData || !checkData.invoice_id) {
-          setStatus({ type: 'error', msg: 'Failed to create invoice in database.' });
+        if (!res.success || !res.data) {
+          setStatus({ type: 'error', msg: res.error || 'Failed to create invoice in database.' });
         } else {
+          const checkData = res.data;
+          if (checkData.already_processed) {
+            console.log('Checkout was already processed previously (Idempotent Hit)');
+          }
+          idempotencyKeyRef.current = crypto.randomUUID();
+          
           const totalPaidAmt = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
           const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
           setLastCheckoutSummary({
@@ -1138,6 +1324,46 @@ function formatHumanReadableError(errorMsg: string): string {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-canvas overflow-hidden font-sans">
+      {/* LINE SALES / ROAD PROFORMA MODE TOP BANNER */}
+      {isLineMode && (
+        <div className={`px-4 py-2.5 flex items-center justify-between shadow-md shrink-0 border-b animate-in fade-in ${
+          isProformaMode 
+            ? 'bg-blue-600 text-white border-blue-700' 
+            : 'bg-emerald-700 text-white border-emerald-800'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className={`p-1.5 rounded-lg ${isProformaMode ? 'bg-blue-700/80 text-blue-100' : 'bg-emerald-800/80 text-emerald-100'}`}>
+              {isProformaMode ? <FileCheck className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
+            </span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-sm tracking-wide">
+                  {isProformaMode ? 'ROAD PROFORMA MODE (GATE PASS)' : 'LINE SALES BILLING MODE'}
+                </span>
+                <span className="text-[11px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/30 font-mono">
+                  Linesman: {lineStaff?.name || 'Loading...'} {lineStaff?.route_name ? `(${lineStaff.route_name})` : ''}
+                </span>
+                <span className="text-[10px] font-bold bg-black/20 text-white/90 px-2 py-0.5 rounded-full">
+                  Van Stock Only
+                </span>
+              </div>
+              <p className="text-[11px] text-white/80 mt-0.5">
+                {isProformaMode 
+                  ? 'Generating road transit gate pass. Quantities and items are isolated to this linesman’s van inventory.' 
+                  : 'Billing sold items directly from this linesman’s van inventory into official sales invoices.'}
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/line-sales/${lineStaffId}`}
+            className="bg-white text-gray-900 px-3.5 py-1.5 text-xs font-bold rounded-lg hover:bg-gray-100 transition-colors shadow-xs flex items-center gap-1.5 shrink-0"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Return to Linesman Hub</span>
+          </Link>
+        </div>
+      )}
+
       {/* EDITING INVOICE PROMINENT TOP BANNER */}
       {editInvoiceId && (
         <div className="bg-amber-600 text-white px-4 py-2.5 flex items-center justify-between shadow-md shrink-0 border-b border-amber-700 animate-in fade-in">
@@ -1568,7 +1794,7 @@ function formatHumanReadableError(errorMsg: string): string {
                   )}
                 </div>
 
-                {effectiveAvailableCredit > 0 && (
+                {resolvedCustomerId && effectiveAvailableCredit > 0 && (
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Wallet className="w-4 h-4 text-emerald-700" />
@@ -1732,8 +1958,8 @@ function formatHumanReadableError(errorMsg: string): string {
               <div className="space-y-3 pt-4 border-t border-border">
                 <label className="text-[13px] font-bold text-ink-primary">Payment method</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['CASH', 'UPI', 'CREDIT', 'SPLIT', 'STORE_CREDIT'] as const).map(m => {
-                    if (m === 'STORE_CREDIT' && effectiveAvailableCredit <= 0) return null;
+                  {(['CASH', 'UPI', 'CHEQUE', 'CREDIT', 'SPLIT', 'STORE_CREDIT'] as const).map(m => {
+                    if (m === 'STORE_CREDIT' && (!resolvedCustomerId || effectiveAvailableCredit <= 0)) return null;
                     return (
                       <button
                         key={m}
@@ -1745,24 +1971,81 @@ function formatHumanReadableError(errorMsg: string): string {
                             setIsSplitModalOpen(true);
                           }
                         }}
-                        className={`p-2.5 rounded-[8px] border text-[13px] font-bold transition-all flex flex-col items-center gap-1 disabled:opacity-50 ${
+                        className={`p-2.5 rounded-[8px] border text-[12px] font-bold transition-all flex flex-col items-center gap-1 disabled:opacity-50 cursor-pointer ${
                           paymentMethod === m 
                             ? m === 'STORE_CREDIT' 
-                              ? 'border-emerald-600 bg-emerald-50 text-emerald-900 shadow-sm'
-                              : 'border-accent bg-red-50 text-accent shadow-sm'
+                              ? 'border-purple-600 bg-purple-600 text-white shadow-sm'
+                              : m === 'CHEQUE'
+                              ? 'border-amber-600 bg-amber-600 text-white shadow-sm'
+                              : 'border-accent bg-accent text-white shadow-sm'
                             : 'border-border bg-surface text-ink-muted hover:border-gray-300'
                         }`}
                       >
                         {m === 'CASH' && <IndianRupee className="w-4 h-4" />}
                         {m === 'UPI' && <CreditCard className="w-4 h-4" />}
+                        {m === 'CHEQUE' && <FileText className="w-4 h-4" />}
                         {m === 'CREDIT' && <User className="w-4 h-4" />}
                         {m === 'SPLIT' && <Percent className="w-4 h-4" />}
-                        {m === 'STORE_CREDIT' && <Wallet className="w-4 h-4 text-emerald-700" />}
-                        <span>{m === 'STORE_CREDIT' ? 'Store Credit' : m}</span>
+                        {m === 'STORE_CREDIT' && <Wallet className="w-4 h-4 text-emerald-300" />}
+                        <span>{m === 'STORE_CREDIT' ? 'Store Credit' : m === 'CHEQUE' ? 'Cheque' : m}</span>
                       </button>
                     );
                   })}
                 </div>
+
+                {paymentMethod === 'CHEQUE' && (
+                  <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl space-y-3 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-amber-700" />
+                        Cheque Details (Pending Clearance)
+                      </span>
+                      <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                        Pending
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-amber-800 leading-tight">
+                      Cheque amount (₹{finalTotal.toFixed(2)}) will be recorded as <strong>Pending</strong> without inflating instant cash collections. Settle it in the Customer&apos;s profile once cleared by the bank.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 mb-0.5">Cheque Number *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. 000124"
+                          value={chequeNumber}
+                          onChange={e => setChequeNumber(e.target.value)}
+                          className="w-full p-2 bg-white border border-amber-300 rounded-lg text-xs font-mono font-bold text-ink-primary focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-amber-900 mb-0.5">Bank Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. HDFC / SBI"
+                          value={chequeBankName}
+                          onChange={e => setChequeBankName(e.target.value)}
+                          className="w-full p-2 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-ink-primary focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-amber-900 mb-0.5">Cheque Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={chequeDate}
+                        onChange={e => setChequeDate(e.target.value)}
+                        className="w-full p-2 bg-white border border-amber-300 rounded-lg text-xs font-mono text-ink-primary focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Split Details Display */}
@@ -1779,7 +2062,7 @@ function formatHumanReadableError(errorMsg: string): string {
                   ) : (
                     <p className="text-red-600 font-medium mb-3">Split must cover the full bill. Partial dues are not allowed with Split.</p>
                   )}
-                  <button onClick={() => setIsSplitModalOpen(true)} className="w-full py-2 border border-accent text-accent rounded-[8px] font-bold">Edit split amounts</button>
+                  <button onClick={() => setIsSplitModalOpen(true)} className="w-full py-2 border border-accent text-accent rounded-[8px] font-bold cursor-pointer">Edit split amounts</button>
                 </div>
               )}
 
@@ -1800,7 +2083,7 @@ function formatHumanReadableError(errorMsg: string): string {
                     </div>
                     <input 
                       type="number" 
-                      min="0"
+                      min="0" 
                       disabled={loading || isInitialLoadingInvoice}
                       placeholder={finalTotal.toFixed(2)} 
                       value={amountPaidStr} 
@@ -1866,7 +2149,7 @@ function formatHumanReadableError(errorMsg: string): string {
                   ((paymentMethod === 'CASH' || paymentMethod === 'UPI') && parseFloat(amountPaidStr || '0') > finalTotal) ||
                   (paymentMethod === 'STORE_CREDIT' && effectiveAvailableCredit < finalTotal)
                 }
-                className={`w-full py-3.5 rounded-[10px] font-bold text-[15px] transition-colors disabled:opacity-50 shadow-sm flex items-center justify-center gap-2 ${
+                className={`w-full py-3.5 rounded-[10px] font-bold text-[15px] transition-colors disabled:opacity-50 shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
                   editInvoiceId 
                     ? 'bg-amber-600 hover:bg-amber-700 text-white' 
                     : 'bg-accent hover:bg-[#1D4ED8] text-white'
@@ -1914,7 +2197,7 @@ function formatHumanReadableError(errorMsg: string): string {
               </div>
             )}
             <div className="space-y-3.5">
-              {effectiveAvailableCredit > 0 && (
+              {resolvedCustomerId && effectiveAvailableCredit > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-xs font-bold text-emerald-800 flex items-center gap-1">

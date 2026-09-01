@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare, X, Send, Copy, Check, Phone } from 'lucide-react';
 import { cleanWhatsAppPhone, openWhatsAppChat } from '@/lib/whatsapp';
 import toast from 'react-hot-toast';
@@ -24,6 +24,12 @@ export function WhatsAppPromptModal({
 }: WhatsAppPromptModalProps) {
   const [phoneNumber, setPhoneNumber] = useState(defaultPhone || '');
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setPhoneNumber(defaultPhone || '');
+    }
+  }, [isOpen, defaultPhone]);
 
   if (!isOpen) return null;
 
