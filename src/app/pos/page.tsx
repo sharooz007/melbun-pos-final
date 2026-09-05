@@ -40,8 +40,7 @@ import {
   billLineStaffSalesAction, 
   createLineDummyInvoiceAction 
 } from '@/lib/actions/line-sales';
-import { getCustomersListAction, getOrCreateCustomerAction } from '@/lib/actions/customers';
-import { processCheckoutAction, updateFullInvoiceAction } from '@/lib/actions/checkout';
+import { getCustomersListAction } from '@/lib/actions/customers';
 import { getFullInvoiceAction } from '@/lib/actions/invoices';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
 import { generateInvoicePDF } from '@/lib/pdf/generateInvoice';
@@ -574,10 +573,18 @@ function POSContent() {
     }
   };
 
-  const isSplitModalOpenRef = useRef(false);
+  // High 12: Unified Modal & Submission Ref Lock
+  const isAnyModalOpenRef = useRef(false);
   useEffect(() => {
-    isSplitModalOpenRef.current = isSplitModalOpen;
-  }, [isSplitModalOpen]);
+    isAnyModalOpenRef.current = Boolean(
+      isSplitModalOpen ||
+      isClearCartModalOpen ||
+      isCameraOpen ||
+      Boolean(selectedProductGroup) ||
+      whatsappModal.isOpen ||
+      (status && status.type === 'success')
+    );
+  }, [isSplitModalOpen, isClearCartModalOpen, isCameraOpen, selectedProductGroup, whatsappModal.isOpen, status]);
 
   // Global Hardware USB Scanner Listener
   useEffect(() => {
@@ -585,7 +592,11 @@ function POSContent() {
     let lastKeyTime = 0;
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (isSplitModalOpenRef.current) return;
+      // High 12: Ignore background scans if any modal is open or checkout is in-flight
+      if (isAnyModalOpenRef.current || isSubmittingRef.current) {
+        scanBuffer = '';
+        return;
+      }
 
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
@@ -594,15 +605,36 @@ function POSContent() {
       const diff = now - lastKeyTime;
       lastKeyTime = now;
 
-      // Reset buffer if keystroke is too slow for a hardware scanner
+      // Reset buffer if keystroke is too slow for a hardware scanner (> 50ms)
       if (diff > 50) {
         scanBuffer = e.key.length === 1 ? e.key : '';
-        if (isInput) return; // Allow normal typing
+        if (isInput) return; // Allow normal manual typing
       } else {
         if (e.key.length === 1) scanBuffer += e.key;
+
+        // High 11: Hardware scanner burst detected! Prevent input pollution
         if (isInput && scanBuffer.length > 1) {
           e.preventDefault();
           e.stopPropagation();
+
+          // If 2nd char arrived within 50ms, strip the leaked 1st char from the input field
+          if (scanBuffer.length === 2 && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+            const firstChar = scanBuffer[0];
+            const proto = target instanceof HTMLTextAreaElement
+              ? window.HTMLTextAreaElement.prototype
+              : window.HTMLInputElement.prototype;
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+
+            if (target.value.endsWith(firstChar)) {
+              const cleanedVal = target.value.slice(0, -firstChar.length);
+              if (nativeInputValueSetter) {
+                nativeInputValueSetter.call(target, cleanedVal);
+              } else {
+                target.value = cleanedVal;
+              }
+              target.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          }
         }
       }
 
@@ -612,6 +644,11 @@ function POSContent() {
           e.stopPropagation();
           const barcode = scanBuffer.trim();
           scanBuffer = '';
+
+          if (isInput && target instanceof HTMLInputElement) {
+            target.blur();
+          }
+
           searchVariantsAction(barcode, lineStaffId).then((res) => {
             if (res.success && res.data && res.data.length > 0) {
               const exact = res.data.find((v: any) => (v.barcode && v.barcode.toLowerCase() === barcode.toLowerCase()) || (v.sku && v.sku.toLowerCase() === barcode.toLowerCase()));
@@ -1013,18 +1050,18 @@ function formatHumanReadableError(errorMsg: string): string {
       const supabase = createClient();
       let finalCustomerId = resolvedCustomerId;
       if (customerName.trim() || customerPhone.trim()) {
-        const res = await getOrCreateCustomerAction(
-          customerName.trim() || null,
-          customerPhone.trim() || null
-        );
+        const { data: custData, error: custErr } = await supabase.rpc('get_or_create_customer', {
+          p_name: customerName.trim() || null,
+          p_phone: customerPhone.trim() || null
+        });
 
-        if (!res.success || !res.customer) {
-          setStatus({ type: 'error', msg: res.error || 'Failed to save customer' });
+        if (custErr || !custData || !custData.customer) {
+          setStatus({ type: 'error', msg: formatHumanReadableError(custErr?.message || 'Failed to save customer') });
           setLoading(false);
           isSubmittingRef.current = false;
           return;
         }
-        finalCustomerId = res.customer.id;
+        finalCustomerId = custData.customer.id;
         setResolvedCustomerId(finalCustomerId);
       }
 
@@ -1203,33 +1240,35 @@ function formatHumanReadableError(errorMsg: string): string {
       }
 
       if (editInvoiceId) {
-        // EXECUTE FULL INVOICE UPDATE VIA SERVER ACTION
-        const res = await updateFullInvoiceAction({
-          invoice_id: editInvoiceId,
-          customer_id: finalCustomerId || null,
-          created_at: isoTimestamp,
-          subtotal: round2(subtotal),
-          discount_amount: round2(discountAmount),
-          round_off: round2(roundOffAmount),
-          gst_applied: gstApplied,
-          cgst_amount: round2(cgstAmount),
-          sgst_amount: round2(sgstAmount),
-          final_total: round2(finalTotal),
-          items: validCart.map(i => ({
+        // EXECUTE FULL INVOICE UPDATE DIRECTLY VIA CLIENT
+        const { data: editData, error: editErr } = await supabase.rpc('update_full_invoice', {
+          p_invoice_id: editInvoiceId,
+          p_customer_id: finalCustomerId || null,
+          p_created_at: isoTimestamp,
+          p_subtotal: round2(subtotal),
+          p_discount_amount: round2(discountAmount),
+          p_round_off: round2(roundOffAmount),
+          p_gst_applied: gstApplied,
+          p_cgst_amount: round2(cgstAmount),
+          p_sgst_amount: round2(sgstAmount),
+          p_final_total: round2(finalTotal),
+          p_items: validCart.map(i => ({
             variant_id: i.variant_id,
             sets_quantity: i.sets_quantity,
             loose_quantity: i.loose_quantity,
-            selling_price_snapshot: round2(i.price)
+            selling_price: round2(i.price)
           })),
-          payments: payments.map(p => ({
+          p_payments: payments.map(p => ({
             amount: round2(p.amount),
             method: p.method
           })),
-          cheque_details: chequeDetails
+          p_cheque_details: chequeDetails
         });
 
-        if (!res.success) {
-          setStatus({ type: 'error', msg: res.error || 'Failed to update invoice in database.' });
+        if (editErr) {
+          setStatus({ type: 'error', msg: formatHumanReadableError(editErr.message) });
+        } else if (!editData || !editData.invoice_id) {
+          setStatus({ type: 'error', msg: 'Failed to update invoice in database.' });
         } else {
           const totalPaidAmt = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
           const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
@@ -1255,35 +1294,36 @@ function formatHumanReadableError(errorMsg: string): string {
           router.refresh();
         }
       } else {
-        // EXECUTE NEW CHECKOUT VIA SERVER ACTION
-        const res = await processCheckoutAction({
-          customer_id: finalCustomerId || null,
-          subtotal: round2(subtotal),
-          discount_amount: round2(discountAmount),
-          round_off: round2(roundOffAmount),
-          gst_applied: gstApplied,
-          cgst_amount: round2(cgstAmount),
-          sgst_amount: round2(sgstAmount),
-          final_total: round2(finalTotal),
-          items: validCart.map(i => ({
+        // EXECUTE NEW CHECKOUT DIRECTLY VIA CLIENT
+        const { data: checkData, error: checkErr } = await supabase.rpc('process_checkout', {
+          p_customer_id: finalCustomerId || null,
+          p_subtotal: round2(subtotal),
+          p_discount_amount: round2(discountAmount),
+          p_round_off: round2(roundOffAmount),
+          p_gst_applied: gstApplied,
+          p_cgst_amount: round2(cgstAmount),
+          p_sgst_amount: round2(sgstAmount),
+          p_final_total: round2(finalTotal),
+          p_items: validCart.map(i => ({
             variant_id: i.variant_id,
             sets_quantity: i.sets_quantity,
             loose_quantity: i.loose_quantity,
-            selling_price_snapshot: round2(i.price)
+            selling_price: round2(i.price)
           })),
-          payments: payments.map(p => ({
+          p_payments: payments.map(p => ({
             amount: round2(p.amount),
             method: p.method
           })),
-          created_at: isoTimestamp,
-          cheque_details: chequeDetails,
-          idempotency_key: idempotencyKeyRef.current
+          p_created_at: isoTimestamp,
+          p_cheque_details: chequeDetails,
+          p_idempotency_key: idempotencyKeyRef.current
         });
 
-        if (!res.success || !res.data) {
-          setStatus({ type: 'error', msg: res.error || 'Failed to create invoice in database.' });
+        if (checkErr) {
+          setStatus({ type: 'error', msg: formatHumanReadableError(checkErr.message) });
+        } else if (!checkData || !checkData.invoice_id) {
+          setStatus({ type: 'error', msg: 'Failed to create invoice in database.' });
         } else {
-          const checkData = res.data;
           if (checkData.already_processed) {
             console.log('Checkout was already processed previously (Idempotent Hit)');
           }

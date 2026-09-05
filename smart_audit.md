@@ -39,6 +39,14 @@
     - When an invoice is retroactively edited and line items are updated, cost prices synchronize with the active catalog `cost_price` to maintain consistency across edited records.
 13. **Flexible Device Timezone Buffer Policy (`POS-15`, `DATE-LIMIT-01`)**:
     - The POS invoice date selector relies on the backend PostgreSQL 24-hour future date buffer (`NOW() + INTERVAL '1 day'`) to accommodate multi-timezone device clock drifts rather than hard-clamping client-side calendar pickers to the second.
+14. **Retroactive Cost & Profit Recalculation Policy (`INV-10`, `High 4`)**:
+    - Retroactive overwrite of `cost_price_snapshot` and `profit_snapshot` on historical closed invoices when catalog cost prices are updated in Pricing Manager is an explicit business decision. The store chooses to synchronize historical profit reports with active catalog variant costs.
+15. **Two-State Cheque Lifecycle Policy (`CHQ-01`, `High 9`)**:
+    - Cheque tracking intentionally supports only `PENDING` and `CLEARED` states. Dedicated `BOUNCED` or `REJECTED` state machines are deliberately omitted; bounced cheques are handled operationally outside the POS.
+16. **Cheque Number De-Duplication Policy (`CHQ-02`, `High 10`)**:
+    - Duplicate cheque numbers are permitted across transactions without unique database constraints to support recurring cheque series and multi-deposit workflows.
+17. **Authenticated Unified Access Policy (`SEC-01`, `High 15`)**:
+    - Standardized `USING (true) WITH CHECK (true)` RLS access for all authenticated staff users is the intended security model for single-tenant internal store operations.
 
 ---
 
@@ -356,4 +364,61 @@
 5. **`ROUTE-PARAM-01` (Navigation Query Parameter Normalization)**:
    - Files: [`src/app/invoices/InvoicesClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/invoices/InvoicesClient.tsx), [`src/app/invoices/[id]/InvoiceDetailClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/invoices/%5Bid%5D/InvoiceDetailClient.tsx)
    - Resolution: Standardized all POS edit navigation links to `/pos?editInvoiceId=${id}`.
+
+---
+
+## 🏆 Cycle 11: Core P0 Invariants & Store Policy Alignments — ALL RESOLVED & VERIFIED ✅
+
+1. **`P0-RET-01` (Pack Size Divisor Regression in `process_return`)**:
+   - File: [`supabase/migrations/0086_fix_p0_returns_pack_size_and_invoice_edit_stock_audit.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0086_fix_p0_returns_pack_size_and_invoice_edit_stock_audit.sql)
+   - Resolution: Restored variant-level pack size priority `v_pps := GREATEST(COALESCE(v_variant.pieces_per_set, v_product.pieces_per_set, 1), 1);` and `v_total_pieces_to_return := (p_sets_quantity * v_pps) + p_loose_quantity;`. Populated `sets_change` and `loose_change` on `stock_movements`.
+2. **`P0-INV-01` (Stock Movement Audit Deletion & FK Nullification in `update_full_invoice`)**:
+   - File: [`supabase/migrations/0086_fix_p0_returns_pack_size_and_invoice_edit_stock_audit.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0086_fix_p0_returns_pack_size_and_invoice_edit_stock_audit.sql)
+   - Resolution: Completely eliminated destructive `DELETE FROM stock_movements` and `invoice_item_id = NULL`. Implemented append-only compensating delta movements (`'MANUAL_ADJUST'`), in-place `invoice_items` reconciliation, and dedicated van stock isolation (`line_van_inventory` & `line_stock_movements`).
+3. **`POL-HIGH-04` (Retroactive Cost & Profit Overwrite)**:
+   - Status: `RESOLVED / INTENDED STORE POLICY ✅` (Confirmed as Policy 14: Historical invoices update profit snapshots when catalog cost is revised).
+4. **`POL-HIGH-09` (Two-State Cheque Lifecycle)**:
+   - Status: `RESOLVED / INTENDED STORE POLICY ✅` (Confirmed as Policy 15: Two-state `PENDING`/`CLEARED` flow is intentional).
+5. **`POL-HIGH-10` (Cheque Number Duplication Allowance)**:
+   - Status: `RESOLVED / INTENDED STORE POLICY ✅` (Confirmed as Policy 16: Duplicate cheque numbers permitted across transactions).
+6. **`POL-HIGH-15` (Permissive Authenticated RLS Access)**:
+   - Status: `RESOLVED / INTENDED STORE POLICY ✅` (Confirmed as Policy 17: Standard authenticated access across terminals is intentional).
+
+---
+
+## 💎 Cycle 12: All 11 P1 High Integrity & Edge Issues — ALL RESOLVED & VERIFIED ✅
+
+1. **`HIGH-01` (PDF Returns Summary Deduction Reconciliation)**:
+   - File: [`src/lib/pdf/generateInvoice.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/pdf/generateInvoice.ts)
+   - Resolution: When `returnedAmount > 0`, explicitly rendered "Returns Deducted: -₹X" and "Net Payable: ₹Y" in the totals box and updated the invoice amount in words to match net payable, reconciling totals with refunds.
+2. **`HIGH-02` (PDF Page Overflow Totals Cutoff Prevention)**:
+   - File: [`src/lib/pdf/generateInvoice.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/pdf/generateInvoice.ts)
+   - Resolution: Added dynamic height estimation (`totalsBoxHeight`, factoring in returns lines and GST breakdown) and evaluated `currentY + totalsBoxHeight > pageHeight - margin` before Section 6, triggering `doc.addPage()` to prevent totals being cutoff at page boundaries.
+3. **`HIGH-03` (`undo_void_invoice` Packaged Sets Validation & Clamping)**:
+   - File: [`supabase/migrations/0087_fix_p1_high_integrity_issues.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0087_fix_p1_high_integrity_issues.sql)
+   - Resolution: Added deterministic pessimistic locks (`ORDER BY v.id FOR UPDATE` and `ORDER BY lvi.variant_id FOR UPDATE`), validated `stock_sets >= v_sets_to_deduct`, and clamped sets via `GREATEST(0, LEAST(stock_sets - v_sets_to_deduct, FLOOR((stock_quantity - v_net_pieces_to_deduct)::numeric / effective_pps)))`.
+4. **`HIGH-05` (Stock Ledger Filter & Badge ENUM Alignment)**:
+   - File: [`src/app/inventory/ledger/LedgerClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/inventory/ledger/LedgerClient.tsx)
+   - Resolution: Removed non-existent `'INITIAL_STOCK'` option and registered valid database ENUMs `'LINE_DISPATCH'` and `'LINE_RESTOCK'` in both the dropdown filter and table badge renders.
+5. **`HIGH-06` (Fleet Van Stock Integration in Asset Valuation & Reports)**:
+   - File: [`supabase/migrations/0087_fix_p1_high_integrity_issues.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0087_fix_p1_high_integrity_issues.sql)
+   - Resolution: Joined `line_van_inventory` across `v_stock_at_cost`, Tab 10 `stock_cost`, and Tab 12 `stock_by_category` in `get_comprehensive_reports`, correctly valuing total inventory across both warehouse and van fleet.
+6. **`HIGH-07` (Expense Aggregation RPC Bypassing 1,000-Row Cap)**:
+   - Files: [`supabase/migrations/0087_fix_p1_high_integrity_issues.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0087_fix_p1_high_integrity_issues.sql), [`src/lib/actions/expenses.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/expenses.ts)
+   - Resolution: Created PostgreSQL RPC `get_expense_summary_metrics` that aggregates active sums (`FILTER (WHERE is_voided = FALSE)`), cash, upi, and voided counts directly in the database engine, bypassing PostgREST row limits.
+7. **`HIGH-08` (Un-Phoned Walk-In Customer Collision Prevention)**:
+   - File: [`supabase/migrations/0087_fix_p1_high_integrity_issues.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0087_fix_p1_high_integrity_issues.sql)
+   - Resolution: In `get_or_create_customer`, bypassed `LOWER(name)` matching when phone is NULL/empty, generating discrete customer records for un-phoned walk-in customers to prevent cross-customer balance or dues merging.
+8. **`HIGH-11` (Hardware USB Scanner Keystroke Leak Prevention)**:
+   - File: [`src/app/pos/page.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/pos/page.tsx)
+   - Resolution: Built a capture-phase 50ms keystroke buffer that detects barcode scanner bursts, strips the leaked first character via dynamic prototype property setter (`HTMLInputElement` vs `HTMLTextAreaElement`), and blurs focused inputs on Enter.
+9. **`HIGH-12` (Unified Modal & Checkout Submission Locks on Scanner)**:
+   - File: [`src/app/pos/page.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/pos/page.tsx)
+   - Resolution: Synchronized `isAnyModalOpenRef` across all 6 modals (Split Payment, Clear Cart, Camera, Product Group Variant Selection, WhatsApp, Success Status) and `isSubmittingRef.current`, ignoring background barcode scans whenever a modal is open or checkout is in flight.
+10. **`HIGH-13` (Label Studio Stock Clamping & Batched State Updating)**:
+    - File: [`src/app/labels/page.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/labels/page.tsx)
+    - Resolution: Clamped `fillAllFromStock` to 500 units max (`Math.min(stock, 500)`) in a single batched state updater, and mounted `#print-area` exclusively during active print execution (`isPrinting`).
+11. **`HIGH-14` (2-Column Thermal Roll Print CSS Pagination)**:
+    - File: [`src/app/labels/page.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/labels/page.tsx)
+    - Resolution: Replaced CSS Grid in `.print-container.thermal-2col` with `display: block !important` and `display: inline-flex !important`, ensuring Blink and WebKit print engines honor continuous thermal roll page breaks.
 

@@ -414,7 +414,8 @@ export const generateInvoicePDF = (
   const totalPaid = (invoice.payments || []).reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
   const finalTotalNum = Number(invoice.final_total || 0);
   const totalRefunds = (invoice.returns || []).reduce((acc: number, r: any) => acc + (Number(r.total_refund_amount) || 0), 0);
-  const effectiveTotal = Math.max(0, finalTotalNum - totalRefunds);
+  const returnedAmount = Number(invoice.returned_amount ?? invoice.total_refunds ?? totalRefunds ?? 0);
+  const effectiveTotal = Math.max(0, finalTotalNum - returnedAmount);
   const discountNum = Number(invoice.discount_amount || 0);
   const balanceDue = invoice.is_voided ? 0 : Math.max(0, effectiveTotal - totalPaid);
   const youSaved = discountNum;
@@ -422,6 +423,16 @@ export const generateInvoicePDF = (
   const splitSectionWidth = (contentWidth - 4) / 2;
   const leftColX = margin;
   const rightColX = margin + splitSectionWidth + 4;
+
+  // High 2: Page overflow check before rendering Section 6 (Totals & Tax Summary)
+  // Dynamically calculate totals box height (accounts for returns deducted lines)
+  const rightTotalsHeight = returnedAmount > 0 ? 62 : 52;
+  const estimatedTaxHeight = invoice.gst_applied ? 46 : 38;
+  const totalsBoxHeight = Math.max(rightTotalsHeight, estimatedTaxHeight);
+  if (currentY + totalsBoxHeight > pageHeight - margin) {
+    doc.addPage();
+    currentY = margin;
+  }
 
   const midSectionStartY = currentY;
 
@@ -550,7 +561,6 @@ export const generateInvoicePDF = (
   }
 
   // 6B. RIGHT COLUMN: FINANCIAL TOTALS, WORDS, & RECEIVED
-  const rightTotalsHeight = 52;
   doc.setFillColor(...BG_LIGHT);
   doc.setDrawColor(...BORDER_TERRACOTTA);
   doc.setLineWidth(0.3);
@@ -597,6 +607,12 @@ export const generateInvoicePDF = (
   doc.text(formatCurrency(invoice.final_total), rightColX + splitSectionWidth - 3.5, rY + 3, { align: 'right' });
   rY += 7.5;
 
+  // High 1: Returns Deducted & Net Payable Reconciliation
+  if (returnedAmount > 0) {
+    printRightRow('Returns Deducted', `-${formatCurrency(returnedAmount)}`, true, DANGER_RED);
+    printRightRow('Net Payable', formatCurrency(effectiveTotal), true, BRAND_PRIMARY);
+  }
+
   // Invoice Amount in Words
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.2);
@@ -604,7 +620,7 @@ export const generateInvoicePDF = (
   doc.text('INVOICE AMOUNT IN WORDS:', rightColX + 3.5, rY);
   rY += 3.2;
 
-  const words = numberToIndianWords(invoice.final_total);
+  const words = numberToIndianWords(returnedAmount > 0 ? effectiveTotal : invoice.final_total);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.2);
   doc.setTextColor(...TEXT_PRIMARY);
@@ -621,7 +637,7 @@ export const generateInvoicePDF = (
     printRightRow('You Saved', formatCurrency(youSaved), false, BRAND_PRIMARY);
   }
 
-  currentY = midSectionStartY + Math.max(rightTotalsHeight, (invoice.gst_applied ? 42 : 38)) + 3.5;
+  currentY = Math.max(rY + 2, midSectionStartY + (invoice.gst_applied ? 42 : 38)) + 3.5;
 
   // ==========================================
   // 7. TERMS & CONDITIONS CARD

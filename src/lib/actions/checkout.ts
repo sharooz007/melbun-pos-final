@@ -184,12 +184,16 @@ export async function processCheckoutAction(payload: unknown) {
       return { success: false, error: 'Failed to create invoice record in database.' };
     }
 
-    revalidatePath('/invoices');
-    revalidatePath('/inventory/products');
-    revalidatePath('/inventory/ledger');
-    revalidatePath('/customers');
-    revalidatePath('/reports');
-    revalidatePath('/dashboard');
+    try {
+      revalidatePath('/invoices');
+      revalidatePath('/inventory/products');
+      revalidatePath('/inventory/ledger');
+      revalidatePath('/customers');
+      revalidatePath('/reports');
+      revalidatePath('/dashboard');
+    } catch (e) {
+      console.warn('Path revalidation skipped or failed during processCheckoutAction:', e);
+    }
 
     return { success: true, data };
   } catch (err: any) {
@@ -244,12 +248,16 @@ export async function updateFullInvoiceAction(payload: unknown) {
       return { success: false, error: 'Failed to update invoice record in database.' };
     }
 
-    revalidatePath('/invoices');
-    revalidatePath('/inventory/products');
-    revalidatePath('/inventory/ledger');
-    revalidatePath('/customers');
-    revalidatePath('/reports');
-    revalidatePath('/dashboard');
+    try {
+      revalidatePath('/invoices');
+      revalidatePath('/inventory/products');
+      revalidatePath('/inventory/ledger');
+      revalidatePath('/customers');
+      revalidatePath('/reports');
+      revalidatePath('/dashboard');
+    } catch (e) {
+      console.warn('Path revalidation skipped or failed during updateFullInvoiceAction:', e);
+    }
 
     return { success: true, data };
   } catch (err: any) {

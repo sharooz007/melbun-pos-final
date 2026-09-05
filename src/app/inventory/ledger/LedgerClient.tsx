@@ -168,13 +168,14 @@ export default function LedgerClient({
               className="bg-transparent text-xs font-semibold text-gray-800 outline-none cursor-pointer"
             >
               <option value="ALL">All Types</option>
-              <option value="INITIAL_STOCK">INITIAL_STOCK (Opening)</option>
               <option value="ARRIVAL">ARRIVAL (Stock In)</option>
               <option value="SALE">SALE (Sold)</option>
               <option value="RETURN_RESTOCK">RETURN_RESTOCK</option>
               <option value="RETURN_DAMAGE">RETURN_DAMAGE</option>
               <option value="VOID_RESTOCK">VOID_RESTOCK</option>
               <option value="MANUAL_ADJUST">MANUAL_ADJUST (Corrections)</option>
+              <option value="LINE_DISPATCH">LINE_DISPATCH (Van Dispatch)</option>
+              <option value="LINE_RESTOCK">LINE_RESTOCK (Van Return)</option>
             </select>
           </div>
 
@@ -238,13 +239,14 @@ export default function LedgerClient({
 
                 <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-200/50">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase ${
-                    item.type === 'INITIAL_STOCK' ? 'bg-indigo-100 text-indigo-800' :
                     item.type === 'ARRIVAL' ? 'bg-green-100 text-green-800' :
                     item.type === 'SALE' ? 'bg-blue-100 text-blue-800' :
                     item.type === 'RETURN_RESTOCK' ? 'bg-teal-100 text-teal-800' :
                     item.type === 'RETURN_DAMAGE' ? 'bg-red-100 text-red-800' :
                     item.type === 'VOID_RESTOCK' ? 'bg-purple-100 text-purple-800' :
                     item.type === 'MANUAL_ADJUST' ? 'bg-amber-100 text-amber-800' :
+                    item.type === 'LINE_DISPATCH' ? 'bg-orange-100 text-orange-800' :
+                    item.type === 'LINE_RESTOCK' ? 'bg-cyan-100 text-cyan-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
                     {item.type}
@@ -334,13 +336,14 @@ export default function LedgerClient({
                     </td>
                     <td className="py-3 px-5">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase ${
-                        item.type === 'INITIAL_STOCK' ? 'bg-indigo-100 text-indigo-800' :
                         item.type === 'ARRIVAL' ? 'bg-green-100 text-green-800' :
                         item.type === 'SALE' ? 'bg-blue-100 text-blue-800' :
                         item.type === 'RETURN_RESTOCK' ? 'bg-teal-100 text-teal-800' :
                         item.type === 'RETURN_DAMAGE' ? 'bg-red-100 text-red-800' :
                         item.type === 'VOID_RESTOCK' ? 'bg-purple-100 text-purple-800' :
                         item.type === 'MANUAL_ADJUST' ? 'bg-amber-100 text-amber-800' :
+                        item.type === 'LINE_DISPATCH' ? 'bg-orange-100 text-orange-800' :
+                        item.type === 'LINE_RESTOCK' ? 'bg-cyan-100 text-cyan-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {item.type}

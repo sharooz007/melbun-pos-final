@@ -270,28 +270,18 @@ export async function getExpensesSummaryMetricsAction(): Promise<
 > {
   try {
     const supabase = createClient();
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('amount, payment_method, is_voided')
-      .eq('is_hidden', false);
+    const { data, error } = await supabase.rpc('get_expense_summary_metrics');
 
     if (error) throw error;
-
-    const totalActive = (data || []).filter(e => !e.is_voided);
-    const totalActiveSum = totalActive.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const cashSum = totalActive.filter(e => e.payment_method === 'CASH').reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const upiSum = totalActive.filter(e => e.payment_method === 'UPI').reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const voidedCount = (data || []).filter(e => e.is_voided).length;
-    const totalCount = totalActive.length;
 
     return {
       success: true,
       data: {
-        totalActiveSum,
-        cashSum,
-        upiSum,
-        voidedCount,
-        totalCount
+        totalActiveSum: Number(data?.totalActiveSum ?? 0),
+        cashSum: Number(data?.cashSum ?? 0),
+        upiSum: Number(data?.upiSum ?? 0),
+        voidedCount: Number(data?.voidedCount ?? 0),
+        totalCount: Number(data?.totalCount ?? 0)
       }
     };
   } catch (err: any) {

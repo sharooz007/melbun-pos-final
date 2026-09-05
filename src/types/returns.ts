@@ -118,6 +118,7 @@ export interface RecentReturnAuditItem {
   variants: {
     name: string;
     barcode: string;
+    pieces_per_set?: number;
     products?: {
       name: string;
       pieces_per_set: number;

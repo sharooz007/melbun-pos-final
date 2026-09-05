@@ -178,19 +178,21 @@ export default function LabelsPage() {
   };
 
   const fillAllFromStock = () => {
-    searchResults.forEach((variant) => {
-      if (variant.stock_quantity > 0) {
-        const clampedQty = Math.min(variant.stock_quantity, 500);
-        setQueue((prev) => {
-          const existingIdx = prev.findIndex((item) => item.variant.variant_id === variant.variant_id);
+    // High 13: Batched queue update with strict stock clamp to 500
+    setQueue((prev) => {
+      const updated = [...prev];
+      searchResults.forEach((variant) => {
+        if (variant.stock_quantity > 0) {
+          const clampedQty = Math.min(variant.stock_quantity, 500);
+          const existingIdx = updated.findIndex((item) => item.variant.variant_id === variant.variant_id);
           if (existingIdx >= 0) {
-            const updated = [...prev];
             updated[existingIdx] = { ...updated[existingIdx], quantity: clampedQty };
-            return updated;
+          } else {
+            updated.push({ variant, quantity: clampedQty });
           }
-          return [...prev, { variant, quantity: clampedQty }];
-        });
-      }
+        }
+      });
+      return updated;
     });
   };
 
@@ -767,21 +769,24 @@ export default function LabelsPage() {
           }
 
           /* 2-Column Thermal Roll (100mm wide roll, 2 labels per row) */
+          /* High 14 Fix: Replace display:grid with display:block and inline-flex for WebKit/Chromium print pagination */
           .print-container.thermal-2col {
             width: 100mm;
             margin: 0 auto;
-            display: grid;
-            grid-template-columns: repeat(2, 48mm);
-            column-gap: 4mm;
-            row-gap: 0mm;
+            display: block !important;
+            font-size: 0;
+            line-height: 0;
           }
           .print-container.thermal-2col .print-label-card {
             width: 48mm;
             min-height: 25mm;
             max-height: 32mm;
+            margin-right: 4mm;
+            margin-bottom: 0;
+            display: inline-flex !important;
+            vertical-align: top;
             padding: 1.5mm 1mm;
             box-sizing: border-box;
-            display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: space-between;
@@ -790,6 +795,7 @@ export default function LabelsPage() {
             break-inside: avoid;
           }
           .print-container.thermal-2col .print-label-card:nth-child(2n) {
+            margin-right: 0 !important;
             page-break-after: always;
             break-after: page;
           }
