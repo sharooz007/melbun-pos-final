@@ -1115,7 +1115,7 @@ function formatHumanReadableError(errorMsg: string): string {
       const chequeDetails = paymentMethod === 'CHEQUE' && finalCustomerId ? {
         cheque_number: chequeNumber.trim(),
         bank_name: chequeBankName.trim(),
-        cheque_date: chequeDate
+        cheque_date: chequeDate.trim() || new Date().toISOString().split('T')[0]
       } : null;
 
       if (finalTotal === 0) {
@@ -1127,8 +1127,8 @@ function formatHumanReadableError(errorMsg: string): string {
           isSubmittingRef.current = false;
           return;
         }
-        if (!chequeNumber.trim() || !chequeBankName.trim() || !chequeDate) {
-          setStatus({ type: 'error', msg: 'Cheque Number, Bank Name, and Cheque Date are required.' });
+        if (!chequeNumber.trim() || !chequeBankName.trim()) {
+          setStatus({ type: 'error', msg: 'Cheque Number and Bank Name are required.' });
           setLoading(false);
           isSubmittingRef.current = false;
           return;

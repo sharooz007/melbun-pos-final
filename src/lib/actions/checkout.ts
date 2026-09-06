@@ -21,7 +21,26 @@ const paymentItemSchema = z.object({
 const chequeDetailsSchema = z.object({
   cheque_number: z.string().trim().min(1, 'Cheque number is required'),
   bank_name: z.string().trim().min(1, 'Bank name is required'),
-  cheque_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Cheque date must be YYYY-MM-DD')
+  cheque_date: z
+    .preprocess(
+      (val) => {
+        if (val === undefined || val === null) return new Date().toISOString().split('T')[0];
+        if (typeof val === 'string' && val.trim() === '') return new Date().toISOString().split('T')[0];
+        if (typeof val === 'string') return val.trim();
+        return val;
+      },
+      z
+        .string({ message: 'Cheque date must be a string' })
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Cheque date must be YYYY-MM-DD')
+        .refine((val) => {
+          const [y, m, d] = val.split('-').map(Number);
+          const date = new Date(Date.UTC(y, m - 1, d));
+          return date.getUTCFullYear() === y && 
+                 date.getUTCMonth() === m - 1 && 
+                 date.getUTCDate() === d;
+        }, 'Invalid calendar date')
+    )
+    .default(() => new Date().toISOString().split('T')[0])
 }).optional().nullable();
 
 const baseCheckoutObjectSchema = z.object({
