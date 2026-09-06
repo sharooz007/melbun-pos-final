@@ -37,27 +37,25 @@ export function BarcodeSvg({
 }: BarcodeSvgProps) {
   const { bars, totalWidth, displayValue } = useMemo(() => {
     if (!value || typeof value !== 'string') {
-      return { bars: [], totalWidth: 0, displayValue: '' };
+      return { bars: [], totalWidth: 0, displayValue: '', hasError: false };
     }
 
-    // Filter only valid printable ASCII characters (32 to 126) for Code 128B
-    const sanitized = value
-      .replace(/[\u00A0\u200B\uFEFF\r\n\t]/g, ' ')
-      .split('')
-      .filter(char => {
-        const code = char.charCodeAt(0);
-        return code >= 32 && code <= 126;
-      })
-      .join('')
-      .trim();
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return { bars: [], totalWidth: 0, displayValue: '', hasError: false };
+    }
 
-    if (!sanitized) return { bars: [], totalWidth: 0, displayValue: '' };
+    // P2-09: Validate strictly against printable ASCII (32 to 126) for Code 128B
+    // Reject silently mutating barcodes into invalid or divergent SKUs
+    if (/[^\x20-\x7E]/.test(trimmed)) {
+      return { bars: [], totalWidth: 0, displayValue: trimmed, hasError: true };
+    }
 
     const codes: number[] = [START_B];
     let checksum = START_B;
 
-    for (let i = 0; i < sanitized.length; i++) {
-      const code = sanitized.charCodeAt(i) - 32;
+    for (let i = 0; i < trimmed.length; i++) {
+      const code = trimmed.charCodeAt(i) - 32;
       codes.push(code);
       checksum += (i + 1) * code;
     }
@@ -83,11 +81,18 @@ export function BarcodeSvg({
       }
     }
 
-    return { bars: barSegments, totalWidth: currentX + quietZone, displayValue: sanitized };
+    return { bars: barSegments, totalWidth: currentX + quietZone, displayValue: trimmed, hasError: false };
   }, [value, barWidth]);
 
   if (!bars.length) {
-    return <span className="text-[10px] text-red-500 font-mono">Invalid Barcode</span>;
+    return (
+      <span 
+        className="text-[10px] text-red-500 font-mono font-bold inline-flex items-center gap-1"
+        title={displayValue ? `Barcode contains invalid non-ASCII characters: ${displayValue}` : 'Invalid Barcode'}
+      >
+        Invalid Barcode
+      </span>
+    );
   }
 
   return (

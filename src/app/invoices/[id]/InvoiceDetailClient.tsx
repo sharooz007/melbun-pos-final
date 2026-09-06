@@ -130,7 +130,15 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
         : Number(item.quantity) * (Number(item.selling_price_snapshot) - Number(item.cost_price_snapshot || 0));
       return acc + pSnap;
     }, 0);
-    const netProfit = rawProfit - Number(invoice.discount_amount || 0);
+
+    // P3-01: Calculate profit reversed by product returns
+    const returnedProfit = (invoice.returns || []).reduce((sum: number, ret: any) => {
+      const item = invoice.invoice_items?.find((ii: any) => ii.id === ret.invoice_item_id);
+      if (!item) return sum;
+      const unitProfit = Number(item.selling_price_snapshot || 0) - Number(item.cost_price_snapshot || 0);
+      return sum + (unitProfit * Number(ret.quantity || 0));
+    }, 0);
+    const netProfit = rawProfit - returnedProfit - Number(invoice.discount_amount || 0);
     const finalTotal = Number(invoice.final_total || 0);
     const marginPercent = finalTotal > 0 ? (netProfit / finalTotal) * 100 : 0;
 
@@ -139,7 +147,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
     const totalPaid = (invoice.payments || []).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
     const dueAmount = invoice.is_voided ? 0 : Math.max(0, effectiveTotal - totalPaid);
 
-    return { rawProfit, netProfit, marginPercent, totalRefunds, effectiveTotal, totalPaid, dueAmount };
+    return { rawProfit, netProfit, marginPercent, totalRefunds, effectiveTotal, totalPaid, dueAmount, returnedProfit };
   }, [invoice]);
 
   // WhatsApp Handlers
@@ -176,7 +184,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
       setWhatsappModal({
         isOpen: true,
         title: 'Send WhatsApp Receipt',
-        defaultPhone: '',
+        defaultPhone: invoice.customers?.phone || '',
         message,
         customerName: invoice.customers?.name || 'Walk-in Customer'
       });
@@ -211,7 +219,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
       setWhatsappModal({
         isOpen: true,
         title: 'Send WhatsApp Due Reminder',
-        defaultPhone: '',
+        defaultPhone: invoice.customers?.phone || '',
         message,
         customerName: invoice.customers?.name || 'Customer'
       });
@@ -528,9 +536,14 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
             <div className="text-xl md:text-2xl font-black font-mono text-emerald-900">
               {formatINR(profitMetrics.netProfit)}
             </div>
-            <div className="text-xs font-bold text-emerald-700 mt-0.5 flex items-center gap-1">
-              <span>Margin:</span>
-              <span className="font-mono font-black">{profitMetrics.marginPercent.toFixed(1)}%</span>
+            <div className="text-xs font-bold text-emerald-700 mt-0.5 flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <span>Margin:</span>
+                <span className="font-mono font-black">{profitMetrics.marginPercent.toFixed(1)}%</span>
+              </div>
+              {profitMetrics.returnedProfit > 0 && (
+                <span className="text-[10px] text-amber-700 font-normal">(-{formatINR(profitMetrics.returnedProfit)} ret)</span>
+              )}
             </div>
           </div>
         </div>

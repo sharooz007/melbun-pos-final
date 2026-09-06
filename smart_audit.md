@@ -47,6 +47,15 @@
     - Duplicate cheque numbers are permitted across transactions without unique database constraints to support recurring cheque series and multi-deposit workflows.
 17. **Authenticated Unified Access Policy (`SEC-01`, `High 15`)**:
     - Standardized `USING (true) WITH CHECK (true)` RLS access for all authenticated staff users is the intended security model for single-tenant internal store operations.
+18. **Van Inventory Shrinkage & Road Damage Reconciliation Policy (`VAN-SHRINK-01`, `A-1`, `P2-01`)**:
+    - Discarded as an automated POS system feature or bug per store management directive.
+    - Operational Policy: In-transit van damage, leakage, or shrinkage is not written off en route.
+    - Upon the delivery van returning to base, all physical products are restored/unloaded back onto the main warehouse inventory.
+    - Any damaged goods are subsequently audited and manually adjusted in the warehouse ledger using the standard Inventory Adjustment (`MANUAL_ADJUST`) interface with explanatory manager notes.
+19. **Discrete Invoice Payment Settlement Policy (`PAY-LUMP-01`, `P2-07`)**:
+    - Multi-invoice lump-sum payment allocation across arbitrary customer debts is intentionally discarded as a feature and deemed unnecessary by the store.
+    - Cashiers and line salesmen collect payments strictly on a transparent per-invoice basis using the dedicated "Pay Tab" / "Pay Invoice" flow.
+    - Unallocated bulk remittances are intentionally disallowed in the POS UI to prevent ambiguous debt apportionment, partial interest disputes, and opaque credit reconciliation.
 
 ---
 
@@ -421,4 +430,71 @@
 11. **`HIGH-14` (2-Column Thermal Roll Print CSS Pagination)**:
     - File: [`src/app/labels/page.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/labels/page.tsx)
     - Resolution: Replaced CSS Grid in `.print-container.thermal-2col` with `display: block !important` and `display: inline-flex !important`, ensuring Blink and WebKit print engines honor continuous thermal roll page breaks.
+
+---
+
+## 🛡️ Cycle 13: Full Resolution of Remaining 19 Issues (14 P2 + 5 P3) & Store Policy Hardening — ALL RESOLVED & VERIFIED ✅
+
+1. **`P2-01` / `A-1` (Van Inventory Shrinkage & Road Damage Reconciliation Policy)**:
+   - Status: `RESOLVED / INTENDED STORE POLICY ✅` (Confirmed as Policy 18: In-transit van damage or shrinkage is unloaded back to the warehouse upon van return and audited manually via standard `MANUAL_ADJUST` stock movements with manager notes).
+2. **`P2-02` (Strict Date Range Filtering for Monthly Reports)**:
+   - File: [`supabase/migrations/0088_fix_remaining_p2_p3_issues.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0088_fix_remaining_p2_p3_issues.sql)
+   - Resolution: In `get_comprehensive_reports`, applied `WHERE created_at >= p_start_date AND created_at <= p_end_date` across Tab 4 (`monthly_sales`) and Tab 6 (`monthly_profit`) CTEs, ensuring custom date range selections do not leak trailing 12-month data.
+3. **`P2-03` (Camera Scanner Callback Identity & Stream Restart Prevention)**:
+   - File: [`src/components/lookup/CameraScanner.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/components/lookup/CameraScanner.tsx)
+   - Resolution: Wrapped `onScan` and `onClose` handlers in stable `useRef` containers (`onScanRef`, `onCloseRef`), removing function instances from `useEffect` dependency arrays to prevent camera teardown and stream restart cycles during parent re-renders.
+4. **`P2-04` (Scanner Async Unmount Mid-Scan Protection)**:
+   - File: [`src/components/lookup/CameraScanner.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/components/lookup/CameraScanner.tsx)
+   - Resolution: Nulled `scannerRef.current` synchronously before calling `scanner.clear().catch(...)`, safely ignoring teardown errors and invoking `onCloseRef.current()` unconditionally on user dismissals to prevent `TypeError: Cannot read properties of null`.
+5. **`P2-05` (Decimal Paise Pricing Entry & MAC Calculation)**:
+   - File: [`src/components/inventory/AdjustStockModal.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/components/inventory/AdjustStockModal.tsx)
+   - Resolution: Updated input regex to permit single decimal points (`replace(/[^0-9.]/g, '')`), eliminated `Math.round` truncations on cost inputs, fixed falsy `0` bug on free incoming restocks (`incomingCost !== '' && !isNaN(...)`), and rounded Moving Average Cost (MAC) to 2 decimal places.
+6. **`P2-06` (Universal 6-Digit Collision-Free Invoice Number Generator & PGRST203 Prevention)**:
+   - File: [`supabase/migrations/0088_fix_remaining_p2_p3_issues.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0088_fix_remaining_p2_p3_issues.sql)
+   - Resolution: Implemented universal `generate_invoice_number(prefix, digits, created_at)` with 6-digit random suffix and microsecond clock fallback. Pre-dropped 9-parameter overload to eliminate `PGRST203` ambiguity, and routed authoritative 13-parameter `process_checkout` and `bill_line_staff_sales` through the generator while preserving cheque tracking, anti-tampering guards, and `reference_invoice_id` credit ledger linking.
+7. **`P2-07` (Discrete Invoice Payment Settlement Policy)**:
+   - Status: `RESOLVED / INTENDED STORE POLICY ✅` (Confirmed as Policy 19: Unallocated bulk lump-sum remittances across arbitrary invoices are intentionally disallowed; payments are tracked strictly on a per-invoice basis via dedicated Pay tabs).
+8. **`P2-08` (Zero-Trust Customer Deactivation with Unsettled Dues Checks)**:
+   - Files: [`supabase/migrations/0088_fix_remaining_p2_p3_issues.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0088_fix_remaining_p2_p3_issues.sql), [`src/lib/actions/customers.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/customers.ts)
+   - Resolution: Enforced referential checks in both database RPC `deactivate_customer` and server action `deactivateCustomerAction` verifying that zero open unpaid invoices exist (factoring in returns and integer cent comparison `Math.round(paid * 100) < Math.round(effectiveTotal * 100)`), preventing customer deactivations with unsettled debts.
+9. **`P2-09` (Barcode Code 128 Character Set Validation)**:
+   - File: [`src/components/BarcodeSvg.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/components/BarcodeSvg.tsx)
+   - Resolution: Validated input against Code 128B ASCII range (32–126), rendered an informative error badge upon unsupported characters without throwing runtime exceptions, and resolved `ReferenceError: sanitized is not defined`.
+10. **`P2-10` (POS Active Cart Client-Side Navigation Interceptor)**:
+    - File: [`src/app/pos/page.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/pos/page.tsx)
+    - Resolution: Attached a capture-phase document click listener intercepting Next.js `<Link>` internal navigations when cart items exist, displaying a browser confirmation prompt and preventing inadvertent cart state loss.
+11. **`P2-11` (Accessible Modal Keyboard Trapping & Escape Dismissal)**:
+    - Files: [`src/components/inventory/AddProductModal.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/components/inventory/AddProductModal.tsx), [`src/components/inventory/CategoriesModal.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/components/inventory/CategoriesModal.tsx)
+    - Resolution: Added Escape keydown listeners (placed before early returns) and Tab focus trapping with queryable focusable elements in both modals, adhering to WAI-ARIA dialog specifications.
+12. **`P2-12` (Active Van Stock Soft-Deletion Blocker & Concurrency Locking)**:
+    - Files: [`supabase/migrations/0088_fix_remaining_p2_p3_issues.sql`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/supabase/migrations/0088_fix_remaining_p2_p3_issues.sql), [`src/lib/actions/inventory.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/inventory.ts)
+    - Resolution: In `soft_delete_product`, acquired pessimistic lock on master product (`FOR UPDATE`), queried `line_van_inventory` to reject deactivations if units are allocated across vans, locked variants deterministically (`ORDER BY id FOR UPDATE`) to prevent deadlocks, added alias `delete_product_with_variants`, and validated UUID input format with `z.string().uuid()` in `deleteProductAction`.
+13. **`P2-13` (Resilient Regional Unicode Character Handling & Phone Fallback in PDF)**:
+    - File: [`src/lib/pdf/generateInvoice.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/pdf/generateInvoice.ts)
+    - Resolution: Hardened `cleanAscii(text, fallback)` using `NFKD` Unicode normalization and diacritics stripping. If regional characters are stripped into empty space, returns a resilient fallback (such as `Customer (+91 ${customer.phone})` or `'Valued Customer'`).
+14. **`P2-14` (HSN Per-Item Tax Rounding Reconciliation)**:
+    - File: [`src/lib/pdf/generateInvoice.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/pdf/generateInvoice.ts)
+    - Resolution: Rounded each HSN row to 2 decimal places and adjusted tax drift against authoritative invoice `cgst_amount` and `sgst_amount` on the primary HSN row, eliminating 1–2 paise rounding mismatches in printed invoice summaries.
+15. **`P2-15` (Dynamic IANA Timezone Offset Calculation)**:
+    - File: [`src/lib/business-day.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/business-day.ts)
+    - Resolution: Replaced hardcoded `5.5 * 60 * 60 * 1000` IST constant with `getTimezoneOffsetMs(timezone, date)` using `Intl.DateTimeFormat.formatToParts` with minute rounding to eliminate sub-second jitter and TDZ reference errors.
+16. **`P2-16` (Server-Side Expense Pagination & Dashboard Payload Unpacking)**:
+    - Files: [`src/lib/actions/expenses.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/expenses.ts), [`src/app/expenses/ExpensesClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/expenses/ExpensesClient.tsx), [`src/app/page.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/page.tsx)
+    - Resolution: Implemented server-side pagination (`page`, `pageSize`, `total`, `totalPages`) in `getExpensesAction`, rich pagination controls in `ExpensesClient`, and updated dashboard caller to `getExpensesAction(1, 5)` unpacking `.data.items || []`.
+17. **`P3-01` (Invoice Details Profit Card Returns Deduction)**:
+    - File: [`src/app/invoices/[id]/InvoiceDetailClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/invoices/%5Bid%5D/InvoiceDetailClient.tsx)
+    - Resolution: Deducted `returnedProfit` from invoice gross profit and rendered an explicit return deduction badge `"-₹X returned"` alongside net profit.
+18. **`P3-02` (PDF Watermark Readability Enhancement)**:
+    - File: [`src/lib/pdf/generateInvoice.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/pdf/generateInvoice.ts)
+    - Resolution: Reduced background watermark graphic state opacity from `0.10` to `0.04`, ensuring printed text, SKU codes, and monetary figures remain sharp and legible.
+19. **`P3-03` (Expense Mutation Audit Trail Traceability)**:
+    - File: [`src/lib/actions/expenses.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/actions/expenses.ts)
+    - Resolution: Appended ISO-timestamped modification notes to `notes` upon expense updates, and recorded deletion reasons alongside soft-delete `is_voided = true` state.
+20. **`P3-04` (WhatsApp Due Reminder Phone Pre-population & Property Alignment)**:
+    - Files: [`src/app/customers/[id]/CustomerDetailClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/customers/%5Bid%5D/CustomerDetailClient.tsx), [`src/app/invoices/[id]/InvoiceDetailClient.tsx`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/app/invoices/%5Bid%5D/InvoiceDetailClient.tsx)
+    - Resolution: Pre-populated customer phone number in the WhatsApp reminder modal and corrected invoice paid amount property access to `inv.amount_paid`.
+21. **`P3-05` (Strict Supabase Environment Variable Validation)**:
+    - Files: [`src/lib/supabase/middleware.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/supabase/middleware.ts), [`src/lib/supabase/client.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/supabase/client.ts), [`src/lib/supabase/server.ts`](file:///Users/sharooz007/Documents/Agentic%20coding/MelbunPOS/src/lib/supabase/server.ts)
+    - Resolution: Stripped hardcoded fallback Supabase credentials from browser, server, and middleware clients, requiring valid `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` configurations at runtime.
+
 

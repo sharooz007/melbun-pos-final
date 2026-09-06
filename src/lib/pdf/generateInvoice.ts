@@ -49,9 +49,26 @@ export const formatCurrency = (amount: number | string | null | undefined): stri
   })}`;
 };
 
-export const cleanAscii = (text: string | null | undefined): string => {
-  if (!text) return '';
-  return String(text).replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+export const cleanAscii = (text: string | null | undefined, fallback: string = ''): string => {
+  if (!text) return fallback;
+  
+  let str = String(text)
+    .replace(/₹/g, 'Rs. ')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u2022/g, '*')
+    .replace(/\u2026/g, '...');
+
+  // Normalize and strip combining diacritical marks
+  str = str.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  const ascii = str.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+  
+  // P2-13: If regional script was stripped into empty space, use provided fallback
+  if (!ascii || ascii.length === 0) {
+    return fallback;
+  }
+  return ascii;
 };
 
 export interface GenerateInvoicePdfOptions {
@@ -203,9 +220,10 @@ export const generateInvoicePDF = (
 
   const customer = invoice.customers;
   const isRegistered = Boolean(invoice.customer_id);
-  const customerName = invoice.shop_name || customer?.name || (isRegistered ? 'Registered Customer' : 'Walk-in Customer / Cash Sale');
+  const rawCustName = invoice.shop_name || customer?.name || (isRegistered ? 'Registered Customer' : 'Walk-in Customer / Cash Sale');
+  const customerName = cleanAscii(rawCustName, customer?.phone ? `Customer (+91 ${customer.phone})` : 'Valued Customer');
   const customerPhone = invoice.shop_phone ? `+91 ${invoice.shop_phone}` : (customer?.phone ? `+91 ${customer.phone}` : 'Unregistered');
-  const customerAddress = customer?.address || 'N/A';
+  const customerAddress = cleanAscii(customer?.address, 'N/A');
   const customerGstin = customer?.gstin || 'N/A';
   const customerState = customer?.state || store.state || '';
   const placeOfSupply = invoice.place_of_supply || customerState || 'N/A';
@@ -459,6 +477,28 @@ export const generateInvoicePDF = (
       hsnMap[hsn].totalTax += tax;
     });
 
+    // P2-14: Reconcile HSN per-item rounding drift with authoritative invoice CGST/SGST (Audit Correction 6)
+    const expectedCgst = Number(invoice.cgst_amount || 0);
+    const expectedSgst = Number(invoice.sgst_amount || 0);
+    const hsnKeys = Object.keys(hsnMap);
+    if (hsnKeys.length > 0) {
+      let rawCgst = 0;
+      let rawSgst = 0;
+      hsnKeys.forEach(k => {
+        hsnMap[k].taxable = Math.round(hsnMap[k].taxable * 100) / 100;
+        hsnMap[k].cgst = Math.round(hsnMap[k].cgst * 100) / 100;
+        hsnMap[k].sgst = Math.round(hsnMap[k].sgst * 100) / 100;
+        hsnMap[k].totalTax = Math.round((hsnMap[k].cgst + hsnMap[k].sgst) * 100) / 100;
+        rawCgst += hsnMap[k].cgst;
+        rawSgst += hsnMap[k].sgst;
+      });
+      const diffCgst = Math.round((expectedCgst - rawCgst) * 100) / 100;
+      const diffSgst = Math.round((expectedSgst - rawSgst) * 100) / 100;
+      hsnMap[hsnKeys[0]].cgst = Math.round((hsnMap[hsnKeys[0]].cgst + diffCgst) * 100) / 100;
+      hsnMap[hsnKeys[0]].sgst = Math.round((hsnMap[hsnKeys[0]].sgst + diffSgst) * 100) / 100;
+      hsnMap[hsnKeys[0]].totalTax = Math.round((hsnMap[hsnKeys[0]].cgst + hsnMap[hsnKeys[0]].sgst) * 100) / 100;
+    }
+
     const taxHead = [['HSN / SAC', 'Taxable Amt', 'CGST %', 'CGST Rs', 'SGST %', 'SGST Rs', 'Total Tax']];
     let totalTaxableSum = 0;
     let totalCgstSum = 0;
@@ -696,9 +736,9 @@ export const generateInvoicePDF = (
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     
-    // Background watermark
+    // Background watermark (P3-02: Reduced opacity from 0.10 to 0.04 for high text clarity)
     doc.saveGraphicsState();
-    (doc as any).setGState(new (doc as any).GState({ opacity: 0.10 }));
+    (doc as any).setGState(new (doc as any).GState({ opacity: 0.04 }));
     const wmWidth = 90;
     const wmHeight = 106;
     const wmX = (pageWidth - wmWidth) / 2;

@@ -145,7 +145,7 @@ export default function InvoicesClient({
       date: new Date(inv.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
       item_count: itemsCount,
       total_amount: Number(inv.final_total || inv.total_amount || 0),
-      paid_amount: Number(inv.paid_amount || 0),
+      paid_amount: Number(inv.amount_paid ?? inv.paid_amount ?? 0),
       due_amount: Number(inv.due_amount || 0),
       status: statusLabel
     });
@@ -158,7 +158,7 @@ export default function InvoicesClient({
       setWhatsappModal({
         isOpen: true,
         title: 'Send WhatsApp Receipt',
-        defaultPhone: '',
+        defaultPhone: inv.customers?.phone || '',
         message,
         customerName: inv.customers?.name || 'Walk-in Customer'
       });
@@ -180,7 +180,7 @@ export default function InvoicesClient({
       date: new Date(inv.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
       item_count: itemsCount,
       total_amount: Number(inv.final_total || inv.total_amount || 0),
-      paid_amount: Number(inv.paid_amount || 0),
+      paid_amount: Number(inv.amount_paid ?? inv.paid_amount ?? 0),
       due_amount: Number(inv.due_amount || 0),
       status: `Payment Due: ₹${Number(inv.due_amount).toFixed(2)}`
     });
@@ -193,7 +193,7 @@ export default function InvoicesClient({
       setWhatsappModal({
         isOpen: true,
         title: 'Send WhatsApp Due Reminder',
-        defaultPhone: '',
+        defaultPhone: inv.customers?.phone || '',
         message,
         customerName: inv.customers?.name || 'Customer'
       });

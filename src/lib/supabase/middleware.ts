@@ -1,8 +1,17 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://qrezqagiowilpoboupvl.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZXpxYWdpb3dpbHBvYm91cHZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4MTM5MDAsImV4cCI6MjEwMzM4OTkwMH0.F67ICnl4giBSST13BQ0I7VqZBuUDO9wbbYz_rVCDYo0';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error(
+    'Missing required Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be defined.'
+  );
+}
+
+const supabaseUrl: string = SUPABASE_URL;
+const supabaseAnonKey: string = SUPABASE_ANON_KEY;
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -10,8 +19,8 @@ export async function updateSession(request: NextRequest) {
   })
 
   const supabase = createServerClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {

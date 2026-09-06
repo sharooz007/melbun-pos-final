@@ -111,9 +111,14 @@ export async function createProductAction(payload: unknown) {
 
 export async function deleteProductAction(productId: string) {
   try {
+    const uuidCheck = z.string().uuid('Invalid product ID format').safeParse(productId);
+    if (!uuidCheck.success) {
+      return { success: false, error: uuidCheck.error.issues[0]?.message };
+    }
+
     const supabase = createClient();
     const { error } = await supabase.rpc('soft_delete_product', {
-      p_product_id: productId
+      p_product_id: uuidCheck.data
     });
 
     if (error) {

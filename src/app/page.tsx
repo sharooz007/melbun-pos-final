@@ -60,7 +60,7 @@ export default function DashboardPage() {
           end_date: cutoff.end.toISOString()
         }),
         getAllInvoicesAction(5),
-        getExpensesAction(5)
+        getExpensesAction(1, 5)
       ]);
 
       if (res.success) {
@@ -71,7 +71,7 @@ export default function DashboardPage() {
 
       setRecentInvoices(invRes || []);
       if (expRes.success && expRes.data) {
-        setRecentExpenses(expRes.data);
+        setRecentExpenses(expRes.data.items || []);
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');

@@ -672,17 +672,52 @@ function POSContent() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true });
   }, [lineStaffId]);
 
-  // BeforeUnload Guard
+  const cartRef = useRef(cart);
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
+
+  // BeforeUnload Guard & Client Navigation Interceptor
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isSubmittingRef.current || cart.length > 0) {
+      if (isSubmittingRef.current || cartRef.current.length > 0) {
         e.preventDefault();
         e.returnValue = '';
       }
     };
+
+    // P2-10: Intercept Next.js client-side navigation clicks when cart is not empty
+    const handleDocumentClick = (e: MouseEvent) => {
+      if (cartRef.current.length === 0 || isSubmittingRef.current) return;
+
+      const target = e.target as HTMLElement | null;
+      const anchor = target?.closest('a');
+      if (!anchor) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+      if (anchor.target === '_blank' || anchor.getAttribute('target') === '_blank') return;
+
+      const currentPath = window.location.pathname;
+      if (href === currentPath || href === window.location.pathname + window.location.search) return;
+
+      const confirmed = window.confirm(
+        'You have active items in your cart. Navigating away will clear your cart. Are you sure you want to discard the cart?'
+      );
+
+      if (!confirmed) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [cart.length]);
+    window.addEventListener('click', handleDocumentClick, { capture: true });
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('click', handleDocumentClick, { capture: true });
+    };
+  }, []);
 
   const handleAddToCart = (variant: any) => {
     setSearchResults([]);

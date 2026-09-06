@@ -157,22 +157,37 @@ export async function getExpenseDetailsAction(
 }
 
 export async function getExpensesAction(
-  limit: number = 100
-): Promise<ExpenseActionResult<ExpenseItem[]>> {
+  page: number = 1,
+  pageSize: number = 50
+): Promise<ExpenseActionResult<{ items: ExpenseItem[]; total: number; page: number; pageSize: number; totalPages: number }>> {
   try {
+    const p = Math.max(1, page);
+    const ps = Math.max(1, Math.min(100, pageSize));
+    const offset = (p - 1) * ps;
+
     const supabase = createClient();
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from('expenses')
-      .select('id, category, amount, payment_method, notes, is_voided, created_at, updated_at')
+      .select('id, category, amount, payment_method, notes, is_voided, created_at, updated_at', { count: 'exact' })
       .eq('is_hidden', false)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + ps - 1);
 
     if (error) {
       return { success: false, error: error.message };
     }
 
-    return { success: true, data: (data as unknown as ExpenseItem[]) || [] };
+    const total = count || 0;
+    return {
+      success: true,
+      data: {
+        items: (data as unknown as ExpenseItem[]) || [],
+        total,
+        page: p,
+        pageSize: ps,
+        totalPages: Math.ceil(total / ps) || 1
+      }
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unexpected error while fetching expenses';
     return { success: false, error: message };
@@ -191,13 +206,29 @@ export async function updateExpenseAction(
     }
 
     const supabase = createClient();
+
+    // P3-03: Fetch existing record to verify not voided and construct audit trail
+    const { data: existing, error: fetchErr } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('id', id)
+      .single();
+      
+    if (fetchErr || !existing) return { success: false, error: 'Expense not found.' };
+    if (existing.is_voided) return { success: false, error: 'Cannot edit a voided expense.' };
+
+    const auditNote = `[Edited: ₹${existing.amount} (${existing.category}) -> ₹${parsed.data.amount} (${parsed.data.category})]`;
+    const mergedNotes = parsed.data.notes 
+      ? `${parsed.data.notes} | ${auditNote}`
+      : `${existing.notes || ''} | ${auditNote}`.trim();
+
     const { data, error } = await supabase
       .from('expenses')
       .update({
         category: parsed.data.category,
         amount: parsed.data.amount,
         payment_method: parsed.data.payment_method,
-        notes: parsed.data.notes || null,
+        notes: mergedNotes,
         created_at: parsed.data.created_at ? parsed.data.created_at : undefined,
         updated_at: new Date().toISOString()
       })
@@ -223,7 +254,8 @@ export async function updateExpenseAction(
 }
 
 export async function deleteExpenseAction(
-  id: string
+  id: string,
+  reason: string = 'User deletion'
 ): Promise<ExpenseActionResult<{ id: string }>> {
   try {
     const parsed = deleteExpenseSchema.safeParse({ id });
@@ -232,11 +264,22 @@ export async function deleteExpenseAction(
     }
 
     const supabase = createClient();
+
+    const { data: existing } = await supabase
+      .from('expenses')
+      .select('notes')
+      .eq('id', parsed.data.id)
+      .single();
+      
+    const auditNote = `[Deleted: ${reason} at ${new Date().toISOString()}]`;
+    const mergedNotes = existing?.notes ? `${existing.notes} | ${auditNote}` : auditNote;
+
     const { data, error } = await supabase
       .from('expenses')
       .update({
         is_hidden: true,
         is_voided: true, // Nullifies financial impact in dashboard & reports
+        notes: mergedNotes,
         updated_at: new Date().toISOString()
       })
       .eq('id', parsed.data.id)

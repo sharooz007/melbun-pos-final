@@ -57,6 +57,12 @@ export default function ExpensesClient() {
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
+  // P2-16: Server-side pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
   // Add Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [category, setCategory] = useState('');
@@ -137,16 +143,18 @@ export default function ExpensesClient() {
   }, [expenses, selectedExpenseCat, expenseSearch]);
 
   // Load Expenses & Categories
-  const loadExpenses = useCallback(async () => {
+  const loadExpenses = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
     setLoadingList(true);
     try {
       const [res, metricsRes, catRes] = await Promise.all([
-        getExpensesAction(100),
+        getExpensesAction(targetPage, targetPageSize),
         getExpensesSummaryMetricsAction(),
         getExpenseCategoriesAction()
       ]);
-      if (res.success) {
-        setExpenses(res.data);
+      if (res.success && res.data) {
+        setExpenses(res.data.items || []);
+        setTotalCount(res.data.total || 0);
+        setTotalPages(res.data.totalPages || 1);
       }
       if (metricsRes.success) {
         setMetricsSummary(metricsRes.data);
@@ -157,7 +165,7 @@ export default function ExpensesClient() {
     } finally {
       setLoadingList(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     loadExpenses();
@@ -449,7 +457,7 @@ export default function ExpensesClient() {
 
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           <button
-            onClick={loadExpenses}
+            onClick={() => { loadExpenses(); }}
             disabled={loadingList}
             className="p-2.5 bg-surface hover:bg-row-alt text-ink-muted hover:text-ink-primary border border-border rounded-xl transition shadow-2xs min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
             title="Refresh Ledger"
@@ -651,8 +659,40 @@ export default function ExpensesClient() {
           )}
         </div>
 
-        <div className="p-3.5 border-t border-border bg-row-alt/40 text-xs text-ink-muted flex justify-between items-center">
-          <span>Showing {filteredExpenses.length} of {expenses.length} records</span>
+        {/* P2-16: Server-Side Pagination Bar */}
+        <div className="p-3.5 border-t border-border bg-row-alt/40 text-xs text-ink-muted flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span>Showing {totalCount === 0 ? 0 : (page - 1) * pageSize + 1} - {Math.min(page * pageSize, totalCount)} of {totalCount} records</span>
+            <select
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="bg-surface border border-border rounded px-2 py-1 text-ink-primary font-mono text-xs focus:ring-1 focus:ring-accent outline-none"
+            >
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(prev => Math.max(1, prev - 1))}
+              disabled={page <= 1 || loadingList}
+              className="px-2.5 py-1 bg-surface border border-border rounded-lg text-ink-primary font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-hover transition text-xs"
+            >
+              Previous
+            </button>
+            <span className="font-mono font-bold text-ink-primary">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={page >= totalPages || loadingList}
+              className="px-2.5 py-1 bg-surface border border-border rounded-lg text-ink-primary font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-hover transition text-xs"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 

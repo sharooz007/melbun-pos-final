@@ -22,12 +22,23 @@ export default function CameraScanner({
   const isMountedRef = useRef<boolean>(true);
   const lastScanTimeRef = useRef<number>(0);
   const lastScannedCodeRef = useRef<string>('');
+  const onScanRef = useRef(onScan);
+  const onCloseRef = useRef(onClose);
+  const continuousRef = useRef(continuous);
+
+  // Keep callback references synchronized without triggering effect re-execution
+  useEffect(() => {
+    onScanRef.current = onScan;
+    onCloseRef.current = onClose;
+    continuousRef.current = continuous;
+  });
 
   useEffect(() => {
     isMountedRef.current = true;
+    let activeScanner: Html5QrcodeScanner | null = null;
 
     // Initialize the official Html5QrcodeScanner widget
-    const scanner = new Html5QrcodeScanner(
+    activeScanner = new Html5QrcodeScanner(
       "reader",
       {
         fps: 15,
@@ -55,9 +66,9 @@ export default function CameraScanner({
       /* verbose= */ false
     );
 
-    scannerRef.current = scanner;
+    scannerRef.current = activeScanner;
 
-    scanner.render(
+    activeScanner.render(
       (decodedText: string) => {
         const now = Date.now();
         const isSameCode = decodedText === lastScannedCodeRef.current;
@@ -78,15 +89,21 @@ export default function CameraScanner({
           setLastScannedBarcode(decodedText);
         }
 
-        if (continuous) {
-          if (isMountedRef.current) onScan(decodedText);
+        if (continuousRef.current) {
+          if (isMountedRef.current) onScanRef.current(decodedText);
         } else {
+          const s = scannerRef.current;
+          scannerRef.current = null;
           try {
-            scanner.clear().catch(() => {}).finally(() => {
-              if (isMountedRef.current) onScan(decodedText);
-            });
+            if (s) {
+              s.clear().catch(() => {}).finally(() => {
+                if (isMountedRef.current) onScanRef.current(decodedText);
+              });
+            } else if (isMountedRef.current) {
+              onScanRef.current(decodedText);
+            }
           } catch (_) {
-            if (isMountedRef.current) onScan(decodedText);
+            if (isMountedRef.current) onScanRef.current(decodedText);
           }
         }
       },
@@ -97,11 +114,8 @@ export default function CameraScanner({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        try {
-          scanner.clear().then(() => onClose()).catch(() => onClose());
-        } catch (_) {
-          onClose();
-        }
+        e.preventDefault();
+        handleClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -109,19 +123,23 @@ export default function CameraScanner({
     return () => {
       isMountedRef.current = false;
       window.removeEventListener('keydown', handleKeyDown);
+      const s = scannerRef.current;
+      scannerRef.current = null;
       try {
-        scanner.clear().catch(() => {});
+        if (s) s.clear().catch(() => {});
       } catch (_) {}
     };
-  }, [continuous, onScan, onClose]);
+  }, []); // Run effect exclusively on mount
 
   const handleClose = async () => {
-    if (scannerRef.current) {
+    const s = scannerRef.current;
+    scannerRef.current = null;
+    if (s) {
       try {
-        await scannerRef.current.clear();
+        await s.clear();
       } catch (_) {}
     }
-    onClose();
+    onCloseRef.current();
   };
 
   return (

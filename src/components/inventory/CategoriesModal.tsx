@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Pencil, Trash2, Check, Layers, Plus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -27,6 +27,19 @@ export function CategoriesModal({ isOpen, onClose, categories }: CategoriesModal
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editHsn, setEditHsn] = useState('');
+
+  // P2-11: Escape key dismissal (Hook placed strictly BEFORE early return)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading && !isSubmittingRef.current) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, loading, onClose]);
 
   if (!isOpen) return null;
 

@@ -204,6 +204,41 @@ export async function getCustomerInvoicesAction(id: string) {
 export async function deactivateCustomerAction(id: string) {
   try {
     const supabase = createClient();
+
+    // P2-08: Check wallet credit and open unpaid invoice dues factoring in returns
+    const [custRes, metricRes, unpaidInvoicesRes] = await Promise.all([
+      supabase.from('customers').select('credit_balance').eq('id', id).single(),
+      supabase.from('customer_metrics').select('pending_dues').eq('id', id).single(),
+      supabase.from('invoices')
+        .select('id, invoice_number, final_total, payments(amount), returns(total_refund_amount)')
+        .eq('customer_id', id)
+        .eq('is_voided', false)
+        .eq('is_hidden', false)
+    ]);
+
+    const creditBalance = Number(custRes.data?.credit_balance || 0);
+    if (creditBalance > 0) {
+      return { success: false, error: `Cannot deactivate customer with an active store credit wallet of ₹${creditBalance.toFixed(2)}.` };
+    }
+
+    const dues = Number(metricRes.data?.pending_dues || 0);
+    if (dues > 0) {
+      return { success: false, error: `Cannot deactivate customer with outstanding debt of ₹${dues.toFixed(2)}.` };
+    }
+
+    if (unpaidInvoicesRes.data && unpaidInvoicesRes.data.length > 0) {
+      const hasUnpaid = unpaidInvoicesRes.data.some(inv => {
+        const refunds = (inv.returns || []).reduce((sum: number, r: any) => sum + Number(r.total_refund_amount || 0), 0);
+        const effectiveTotal = Math.max(0, Number(inv.final_total || 0) - refunds);
+        const paid = (inv.payments || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        // Cent integer comparison avoids floating point inaccuracy (Audit Correction 6)
+        return Math.round(paid * 100) < Math.round(effectiveTotal * 100);
+      });
+      if (hasUnpaid) {
+        return { success: false, error: 'Cannot deactivate customer: unpaid or partially paid invoices exist.' };
+      }
+    }
+
     const { error } = await supabase.rpc('deactivate_customer', { p_customer_id: id });
     if (error) throw error;
     

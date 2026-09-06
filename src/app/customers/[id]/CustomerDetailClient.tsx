@@ -204,7 +204,7 @@ export default function CustomerDetailClient({ id }: { id: string }) {
       setWhatsappModal({
         isOpen: true,
         title: 'Send WhatsApp Due Reminder',
-        defaultPhone: '',
+        defaultPhone: customer?.phone || '',
         message,
         customerName: customer?.name || 'Customer'
       });

@@ -20,6 +20,43 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
   const [error, setError] = useState('');
   const prevIsOpenRef = useRef(false);
   const isSubmittingRef = useRef(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // P2-11: Escape key dismissal & focus trap
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading && !isSubmittingRef.current) {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            last.focus();
+            e.preventDefault();
+          }
+        } else {
+          if (document.activeElement === last) {
+            first.focus();
+            e.preventDefault();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, loading, onClose]);
 
   useEffect(() => {
     if (isOpen) {
@@ -169,6 +206,7 @@ export function AddProductModal({ isOpen, onClose, onSubmit, categories = [], in
       onClick={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}
     >
       <div 
+        ref={modalRef}
         className="relative bg-surface w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[88vh] my-auto border border-border overflow-hidden animate-in zoom-in-95 duration-150 cursor-default"
         onClick={e => e.stopPropagation()}
       >

@@ -95,7 +95,7 @@ export default function AdjustStockModal({
       const totalQty = Number(v.stock_quantity || 0);
       const setsQty = v.stock_sets !== undefined ? Number(v.stock_sets) : Math.floor(totalQty / vPps);
       const looseQty = Math.max(0, totalQty - (setsQty * vPps));
-      const currCost = Math.round(Number(v.cost_price || 0));
+      const currCost = Number(v.cost_price || 0);
       const currSell = Math.round(Number(v.selling_price || 0));
 
       initialAdjust[v.id] = {
@@ -187,7 +187,7 @@ export default function AdjustStockModal({
     }
   };
 
-  // Calculate Moving Average Cost (MAC) with zero-division protection and integer rounding
+  // Calculate Moving Average Cost (MAC) with zero-division protection and paise rounding
   const calculateMAC = (currentPieces: number, currentCost: number, incomingPieces: number, incomingCost: number): number => {
     const q1 = Math.max(0, currentPieces);
     const c1 = currentCost;
@@ -196,9 +196,9 @@ export default function AdjustStockModal({
     const totalPieces = q1 + q2;
 
     if (q1 <= 0 || totalPieces <= 0) {
-      return Math.round(c2);
+      return Math.round(c2 * 100) / 100;
     }
-    return Math.round(((q1 * c1) + (q2 * c2)) / totalPieces);
+    return Math.round((((q1 * c1) + (q2 * c2)) / totalPieces) * 100) / 100;
   };
 
   // Handle restock input change & update Moving Average Cost
@@ -207,9 +207,18 @@ export default function AdjustStockModal({
     field: 'addSets' | 'addLoose' | 'incomingCost' | 'finalCost' | 'finalSell', 
     value: string
   ) => {
-    const cleanVal = field === 'incomingCost' || field === 'finalCost' || field === 'finalSell'
-      ? value.replace(/[^0-9]/g, '')
-      : value.replace(/[^0-9]/g, '');
+    let cleanVal = value;
+    if (field === 'incomingCost' || field === 'finalCost') {
+      // Allow digits and at most one decimal point for paise precision
+      cleanVal = value.replace(/[^0-9.]/g, '');
+      const parts = cleanVal.split('.');
+      if (parts.length > 2) {
+        cleanVal = `${parts[0]}.${parts.slice(1).join('')}`;
+      }
+    } else {
+      // Whole integer rupees for selling price (Policy 4) & integer quantities
+      cleanVal = value.replace(/[^0-9]/g, '');
+    }
 
     setRestockRows(prev => {
       const currentRow = prev[variantId] || {
@@ -237,11 +246,13 @@ export default function AdjustStockModal({
           const variant = product.variants.find(v => v.id === variantId);
           const vPps = Number(variant?.pieces_per_set || product.pieces_per_set || 1);
           const currentPieces = Number(variant?.stock_quantity || 0);
-          const currentCost = Math.round(Number(variant?.cost_price || 0));
+          const currentCost = Number(variant?.cost_price || 0);
           const addSets = parseInt(updatedRow.addSets || '0', 10) || 0;
           const addLoose = parseInt(updatedRow.addLoose || '0', 10) || 0;
           const incomingPieces = (addSets * vPps) + addLoose;
-          const incomingCost = parseInt(updatedRow.incomingCost || '0', 10) || currentCost;
+          const incomingCost = updatedRow.incomingCost !== '' && !isNaN(Number(updatedRow.incomingCost))
+            ? Number(updatedRow.incomingCost)
+            : currentCost;
 
           const mac = calculateMAC(currentPieces, currentCost, incomingPieces, incomingCost);
           updatedRow.finalCost = String(mac);
@@ -273,8 +284,11 @@ export default function AdjustStockModal({
 
       const sets = parseInt(row.addSets || '0', 10) || 0;
       const loose = parseInt(row.addLoose || '0', 10) || 0;
-      const cost = parseInt(row.finalCost || '0', 10) || Math.round(Number(v.cost_price || 0));
-      const sell = parseInt(row.finalSell || '0', 10) || Math.round(Number(v.selling_price || 0));
+      const currentCost = Number(v.cost_price || 0);
+      const parsedCost = parseFloat(row.finalCost || '0');
+      const cost = isNaN(parsedCost) ? currentCost : parsedCost;
+      const parsedSell = parseFloat(row.finalSell || '0');
+      const sell = isNaN(parsedSell) ? Math.round(Number(v.selling_price || 0)) : parsedSell;
 
       if (sets > 0 || loose > 0) {
         hasAnyStockAdded = true;
@@ -555,13 +569,15 @@ export default function AdjustStockModal({
 
                 const vPps = Number(v.pieces_per_set || product.pieces_per_set || 1);
                 const currentTotal = Number(v.stock_quantity || 0);
-                const currentCost = Math.round(Number(v.cost_price || 0));
+                const currentCost = Number(v.cost_price || 0);
                 const currentSell = Math.round(Number(v.selling_price || 0));
 
                 const addSets = parseInt(row.addSets || '0', 10) || 0;
                 const addLoose = parseInt(row.addLoose || '0', 10) || 0;
                 const incomingPieces = (addSets * vPps) + addLoose;
-                const incomingCost = parseInt(row.incomingCost || '0', 10) || currentCost;
+                const incomingCost = row.incomingCost !== '' && !isNaN(Number(row.incomingCost))
+                  ? Number(row.incomingCost)
+                  : currentCost;
 
                 const computedMAC = calculateMAC(currentTotal, currentCost, incomingPieces, incomingCost);
 
@@ -571,7 +587,7 @@ export default function AdjustStockModal({
                       <div>
                         <h4 className="font-bold text-xs sm:text-sm text-ink-primary">{v.name}</h4>
                         <p className="text-[11px] text-ink-muted font-mono mt-0.5">
-                          On-hand: <span className="font-bold text-ink-primary">{currentTotal} pcs</span> (Current Cost: ₹{currentCost})
+                          On-hand: <span className="font-bold text-ink-primary">{currentTotal} pcs</span> (Current Cost: ₹{currentCost.toFixed(2).replace(/\.00$/, '')})
                         </p>
                       </div>
 
