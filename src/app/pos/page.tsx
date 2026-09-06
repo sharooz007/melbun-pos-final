@@ -1219,11 +1219,29 @@ function formatHumanReadableError(errorMsg: string): string {
           selling_price: round2(i.price)
         }));
 
-        const linePayments = paymentMethod === 'SPLIT'
-          ? payments.map(p => ({ amount: p.amount, method: p.method }))
-          : (paymentMethod === 'CREDIT' || paymentMethod === 'CHEQUE'
-              ? []
-              : [{ amount: Number(amountPaid) > 0 ? Number(amountPaid) : finalTotal, method: paymentMethod as 'CASH' | 'UPI' | 'CARD' }]);
+        let linePayments: { amount: number; method: string }[] = [];
+
+        if (paymentMethod === 'CREDIT' || paymentMethod === 'CHEQUE') {
+          linePayments = [];
+        } else if (paymentMethod === 'SPLIT' || paymentMethod === 'STORE_CREDIT') {
+          linePayments = payments
+            .map(p => ({ amount: round2(p.amount), method: p.method }))
+            .filter(p => p.amount > 0);
+        } else {
+          // Single payment: CASH, UPI, CARD
+          const rawPaidStr = typeof amountPaidStr === 'string' ? amountPaidStr.trim() : (amountPaid !== undefined ? String(amountPaid).trim() : '');
+          let tenderAmount = finalTotal;
+          if (rawPaidStr !== '') {
+            const parsed = Number(rawPaidStr);
+            tenderAmount = !isNaN(parsed)
+              ? Math.min(finalTotal, Math.max(0, round2(parsed)))
+              : 0;
+          }
+
+          linePayments = tenderAmount > 0
+            ? [{ amount: tenderAmount, method: paymentMethod as 'CASH' | 'UPI' | 'CARD' }]
+            : [];
+        }
 
         const res = await billLineStaffSalesAction({
           staff_id: lineStaffId,
@@ -1246,8 +1264,8 @@ function formatHumanReadableError(errorMsg: string): string {
           }
           idempotencyKeyRef.current = crypto.randomUUID();
           
-          const totalPaidAmt = linePayments.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
-          const pendingDueAmt = Math.max(0, finalTotal - totalPaidAmt);
+          const totalPaidAmt = round2(linePayments.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0));
+          const pendingDueAmt = round2(Math.max(0, finalTotal - totalPaidAmt));
           setLastCheckoutSummary({
             customerName: customerName || undefined,
             customerPhone: customerPhone || undefined,
