@@ -18,12 +18,15 @@ import {
   AlertCircle,
   Eye,
   PackageCheck,
-  Sparkles
+  Sparkles,
+  FileDown,
+  Loader2
 } from 'lucide-react';
 import { searchVariantsForLabelsAction } from '@/lib/actions/labels';
 import { getStoreSettingsAction } from '@/lib/actions/settings';
-import { LabelVariantItem, PrintQueueItem, LabelLayoutMode, LabelConfig } from '@/types/labels';
+import { LabelVariantItem, PrintQueueItem, LabelLayoutMode, LabelConfig, SHEET_COLUMN_PRESETS } from '@/types/labels';
 import { BarcodeSvg } from '@/components/BarcodeSvg';
+import { generateLabelsPDF } from '@/lib/pdf/generateLabelsPdf';
 
 const formatINR = (amount: number) => {
   return new Intl.NumberFormat('en-IN', {
@@ -47,6 +50,7 @@ export default function LabelsPage() {
   // State: Print Queue
   const [queue, setQueue] = useState<PrintQueueItem[]>([]);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // State: Layout & Dimensions
   const [layoutMode, setLayoutMode] = useState<LabelLayoutMode>('thermal-1col');
@@ -60,7 +64,8 @@ export default function LabelsPage() {
     showPackSize: true,
     showBarcodeText: true,
     barcodeHeight: 34,
-    customHeader: ''
+    customHeader: '',
+    columns: 3
   });
 
   // Debounced search for variants
@@ -207,17 +212,22 @@ export default function LabelsPage() {
     return list;
   }, [queue]);
 
-  // Group into chunks of 24 for A4 Sheet pagination
+  // Dynamic column & pagination calculations
+  const activeColumns = config.columns && SHEET_COLUMN_PRESETS[config.columns] ? config.columns : 3;
+  const sheetPreset = SHEET_COLUMN_PRESETS[activeColumns];
+  const labelsPerSheet = sheetPreset.labelsPerPage;
+
+  // Group into chunks of labelsPerSheet for A4 Sheet pagination
   const labelPages = useMemo(() => {
     if (layoutMode !== 'a4-sheet') {
       return [flattenedLabels];
     }
     const pages: LabelVariantItem[][] = [];
-    for (let i = 0; i < flattenedLabels.length; i += 24) {
-      pages.push(flattenedLabels.slice(i, i + 24));
+    for (let i = 0; i < flattenedLabels.length; i += labelsPerSheet) {
+      pages.push(flattenedLabels.slice(i, i + labelsPerSheet));
     }
     return pages.length > 0 ? pages : [[]];
-  }, [flattenedLabels, layoutMode]);
+  }, [flattenedLabels, layoutMode, labelsPerSheet]);
 
   const totalLabelCount = flattenedLabels.length;
 
@@ -231,6 +241,21 @@ export default function LabelsPage() {
         setIsPrinting(false);
       }
     }, 150);
+  };
+
+  const handleDownloadPdf = () => {
+    if (totalLabelCount === 0) return;
+    try {
+      setIsDownloadingPdf(true);
+      const storeName = (config.customHeader || '').trim() || storeSettings?.store_name || 'MELBUN';
+      const doc = generateLabelsPDF(flattenedLabels, config, storeName, layoutMode);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      doc.save(`Labels_${layoutMode}_${totalLabelCount}_items_${timestamp}.pdf`);
+    } catch (err: any) {
+      alert('Failed to generate PDF: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   return (
@@ -262,6 +287,19 @@ export default function LabelsPage() {
             >
               <RotateCcw className="w-4 h-4" />
               Clear Queue
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={totalLabelCount === 0 || isDownloadingPdf}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-accent bg-accent/10 hover:bg-accent/20 border border-accent/20 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileDown className="w-4 h-4" />
+              )}
+              {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
             </button>
             <button
               type="button"
@@ -463,7 +501,7 @@ export default function LabelsPage() {
                 {[
                   { id: 'thermal-1col', label: '1-Col Roll', desc: '50×25mm' },
                   { id: 'thermal-2col', label: '2-Col Roll', desc: '100×25mm' },
-                  { id: 'a4-sheet', label: 'A4 Sheet', desc: '24-up Grid' }
+                  { id: 'a4-sheet', label: 'A4 Sheet', desc: `${sheetPreset.labelsPerPage}-up Grid` }
                 ].map((layout) => (
                   <button
                     key={layout.id}
@@ -481,6 +519,43 @@ export default function LabelsPage() {
                 ))}
               </div>
             </div>
+
+            {/* Sheet Column Customizer (When A4 Sheet is active) */}
+            {layoutMode === 'a4-sheet' && (
+              <div className="space-y-2 pt-2 border-t border-gray-100 animate-in fade-in duration-150">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                    A4 Sheet Columns
+                  </label>
+                  <span className="text-[11px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full">
+                    {sheetPreset.labelsPerPage} labels / page
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[1, 2, 3, 4, 5].map((cols) => {
+                    const preset = SHEET_COLUMN_PRESETS[cols];
+                    const isSelected = activeColumns === cols;
+                    return (
+                      <button
+                        key={cols}
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, columns: cols }))}
+                        className={`py-2 px-1 rounded-xl border text-center transition-all ${
+                          isSelected
+                            ? 'border-accent bg-accent text-white font-bold shadow-xs'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                        }`}
+                      >
+                        <p className="text-xs font-bold">{cols} Col</p>
+                        <p className={`text-[9px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
+                          {preset.labelsPerPage}-up
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Visual Toggles */}
             <div className="space-y-3 pt-2 border-t border-gray-100">
@@ -558,9 +633,16 @@ export default function LabelsPage() {
               <Eye className="w-4 h-4 text-gray-500" />
               Live Interactive Print Preview ({totalLabelCount} labels queued)
             </h2>
-            <span className="text-xs text-gray-400">
-              Profile: <strong className="text-gray-700">{layoutMode.toUpperCase()}</strong>
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">
+                Profile: <strong className="text-gray-700">{layoutMode === 'a4-sheet' ? `A4 SHEET (${activeColumns} COLS • ${sheetPreset.labelsPerPage}/PAGE)` : layoutMode.toUpperCase()}</strong>
+              </span>
+              {layoutMode === 'a4-sheet' && totalLabelCount > 0 && (
+                <span className="text-[11px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+                  {labelPages.length} Page{labelPages.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
           </div>
 
           {flattenedLabels.length === 0 ? (
@@ -575,8 +657,9 @@ export default function LabelsPage() {
                     ? 'w-[220px] flex flex-col gap-3'
                     : layoutMode === 'thermal-2col'
                     ? 'w-[460px] grid grid-cols-2 gap-3'
-                    : 'w-full max-w-[800px] grid grid-cols-3 gap-3'
+                    : 'w-full max-w-[950px] grid gap-3'
                 }`}
+                style={layoutMode === 'a4-sheet' ? { gridTemplateColumns: `repeat(${activeColumns}, minmax(0, 1fr))` } : undefined}
               >
                 {flattenedLabels.slice(0, 6).map((variant, idx) => (
                   <div
@@ -717,7 +800,13 @@ export default function LabelsPage() {
             margin: 0mm;
           }
 
-          body {
+          html, body, #__next, body > div, main {
+            height: auto !important;
+            min-height: 100% !important;
+            max-height: none !important;
+            overflow: visible !important;
+            display: block !important;
+            position: static !important;
             background: #ffffff !important;
             color: #000000 !important;
             margin: 0 !important;
@@ -738,6 +827,13 @@ export default function LabelsPage() {
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
+            overflow: visible !important;
+          }
+
+          .print-a4-pages-container {
+            display: block !important;
+            width: 100% !important;
+            overflow: visible !important;
           }
 
           /* 1-Column Thermal Roll (50mm x 25-30mm) */
@@ -758,14 +854,14 @@ export default function LabelsPage() {
             align-items: center;
             justify-content: space-between;
             text-align: center;
-            page-break-inside: avoid;
-            break-inside: avoid;
-            page-break-after: always;
-            break-after: page;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-after: always !important;
+            break-after: page !important;
           }
           .print-container.thermal-1col .print-label-card:last-child {
-            page-break-after: auto;
-            break-after: auto;
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
 
           /* 2-Column Thermal Roll (100mm wide roll, 2 labels per row) */
@@ -791,43 +887,44 @@ export default function LabelsPage() {
             align-items: center;
             justify-content: space-between;
             text-align: center;
-            page-break-inside: avoid;
-            break-inside: avoid;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .print-container.thermal-2col .print-label-card:nth-child(2n) {
             margin-right: 0 !important;
-            page-break-after: always;
-            break-after: page;
+            page-break-after: always !important;
+            break-after: page !important;
           }
           .print-container.thermal-2col .print-label-card:last-child {
-            page-break-after: auto;
-            break-after: auto;
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
 
-          /* A4 Sheet (3-Column Grid, 24 labels per sheet, discrete page blocks) */
+          /* A4 Sheet (Dynamic Grid, multi-page discrete page blocks) */
           .a4-sheet-page {
-            width: 190mm;
-            max-height: 270mm;
+            width: 194mm;
+            max-height: 275mm;
             margin: 0 auto;
             padding: 4mm 0;
             box-sizing: border-box;
             display: grid;
-            grid-template-columns: repeat(3, 60mm);
-            grid-auto-rows: 30mm;
-            column-gap: 5mm;
-            row-gap: 2.5mm;
-            page-break-inside: avoid;
-            break-inside: avoid;
-            page-break-after: always;
-            break-after: page;
+            grid-template-columns: repeat(${activeColumns}, ${sheetPreset.colWidthMm}mm);
+            grid-auto-rows: ${sheetPreset.rowHeightMm}mm;
+            column-gap: ${sheetPreset.colGapMm}mm;
+            row-gap: ${sheetPreset.rowGapMm}mm;
+            justify-content: center;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-after: always !important;
+            break-after: page !important;
           }
           .a4-sheet-page:last-child {
-            page-break-after: auto;
-            break-after: auto;
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
           .a4-sheet-page .print-label-card {
-            width: 60mm;
-            height: 30mm;
+            width: ${sheetPreset.colWidthMm}mm;
+            height: ${sheetPreset.rowHeightMm}mm;
             padding: 1.5mm 1mm;
             box-sizing: border-box;
             display: flex;
@@ -835,14 +932,14 @@ export default function LabelsPage() {
             align-items: center;
             justify-content: space-between;
             text-align: center;
-            page-break-inside: avoid;
-            break-inside: avoid;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
             border: 0.1mm dotted #ccc;
           }
 
           /* Micro-Typography for Printing */
           .label-title {
-            font-size: 7.5pt;
+            font-size: ${activeColumns >= 4 ? '6.5pt' : '7.5pt'};
             font-weight: 700;
             line-height: 1.1;
             max-width: 100%;
@@ -851,7 +948,7 @@ export default function LabelsPage() {
             white-space: nowrap;
           }
           .label-variant {
-            font-size: 7pt;
+            font-size: ${activeColumns >= 4 ? '5.5pt' : '7pt'};
             color: #333;
             line-height: 1;
             max-width: 100%;
@@ -860,12 +957,12 @@ export default function LabelsPage() {
             white-space: nowrap;
           }
           .label-barcode {
-            margin: 1mm 0;
+            margin: 0.5mm 0;
             display: flex;
             justify-content: center;
           }
           .label-price {
-            font-size: 8.5pt;
+            font-size: ${activeColumns >= 4 ? '7pt' : '8.5pt'};
             font-weight: 900;
             line-height: 1;
           }
