@@ -88,6 +88,7 @@ function POSContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerGstin, setCustomerGstin] = useState('');
   const [resolvedCustomerId, setResolvedCustomerId] = useState<string | null>(null);
   const [customerCredit, setCustomerCredit] = useState<number>(0);
   const [originalStoreCreditApplied, setOriginalStoreCreditApplied] = useState<number>(0);
@@ -165,6 +166,7 @@ function POSContent() {
           setResolvedCustomerId(res.data.customers.id);
           setCustomerName(res.data.customers.name || res.data.name);
           setCustomerPhone(res.data.customers.phone || res.data.phone || '');
+          setCustomerGstin(res.data.customers.gstin || '');
           setCustomerCredit(Number(res.data.customers.credit_balance || 0));
         }
       }
@@ -339,12 +341,14 @@ function POSContent() {
           if (inv.customers) {
             setCustomerName(inv.customers.name || '');
             setCustomerPhone(inv.customers.phone || '');
+            setCustomerGstin(inv.customers.gstin || '');
             setResolvedCustomerId(inv.customers.id);
             setOriginalInvoiceCustomerId(inv.customers.id);
             setCustomerCredit(Number(inv.customers.credit_balance || 0));
           } else {
             setCustomerName('');
             setCustomerPhone('');
+            setCustomerGstin('');
             setResolvedCustomerId(null);
             setOriginalInvoiceCustomerId(null);
             setCustomerCredit(0);
@@ -473,13 +477,20 @@ function POSContent() {
       const res = await getCustomersListAction(query);
       if (res.success && res.data) {
         setCustomerSuggestions(res.data.slice(0, 5));
-        const exactPhoneMatch = res.data.find((c: any) => c.phone && c.phone.trim() === customerPhone.trim());
-        if (exactPhoneMatch && !resolvedCustomerId) {
-          setResolvedCustomerId(exactPhoneMatch.id);
+        const exactMatch = res.data.find((c: any) => 
+          (customerPhone.trim() && c.phone && c.phone.trim() === customerPhone.trim()) ||
+          (customerName.trim() && c.name && c.name.trim().toLowerCase() === customerName.trim().toLowerCase())
+        );
+        if (exactMatch && !resolvedCustomerId) {
+          setResolvedCustomerId(exactMatch.id);
           if (!customerName.trim()) {
-            setCustomerName(exactPhoneMatch.name);
+            setCustomerName(exactMatch.name);
           }
-          setCustomerCredit(Number(exactPhoneMatch.credit_balance || 0));
+          if (!customerPhone.trim() && exactMatch.phone) {
+            setCustomerPhone(exactMatch.phone);
+          }
+          setCustomerGstin(exactMatch.gstin || '');
+          setCustomerCredit(Number(exactMatch.credit_balance || 0));
         }
       }
     };
@@ -506,6 +517,7 @@ function POSContent() {
   const selectCustomer = (cust: any) => {
     setCustomerName(cust.name);
     setCustomerPhone(cust.phone || '');
+    setCustomerGstin(cust.gstin || '');
     setResolvedCustomerId(cust.id);
     setCustomerCredit(Number(cust.credit_balance || 0));
     setCustomerSuggestions([]);
@@ -964,6 +976,7 @@ function POSContent() {
     setCart([]);
     setCustomerName('');
     setCustomerPhone('');
+    setCustomerGstin('');
     setResolvedCustomerId(null);
     setCustomerCredit(0);
     setInvoiceDateStr('');
@@ -1081,10 +1094,27 @@ function formatHumanReadableError(errorMsg: string): string {
         return;
       }
 
-      // 1. Resolve Customer if name OR phone is provided
+      // Validate GSTIN format if Tax is applied and GSTIN is provided
+      if (gstApplied && customerGstin.trim()) {
+        const cleanGstin = customerGstin.toUpperCase().replace(/[^0-9A-Z]/g, '').trim();
+        if (cleanGstin.length !== 15) {
+          setStatus({ type: 'error', msg: 'Invalid GSTIN format: Must be exactly 15 alphanumeric characters (e.g. 29AAAAA0000A1Z5).' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        if (!customerName.trim() && !customerPhone.trim() && !resolvedCustomerId) {
+          setStatus({ type: 'error', msg: 'Customer Name or Phone is required when entering a GSTIN.' });
+          setLoading(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+      }
+
+      // 1. Resolve Customer if name OR phone is provided (avoid duplicate creation if already resolved)
       const supabase = createClient();
       let finalCustomerId = resolvedCustomerId;
-      if (customerName.trim() || customerPhone.trim()) {
+      if (!finalCustomerId && (customerName.trim() || customerPhone.trim())) {
         const { data: custData, error: custErr } = await supabase.rpc('get_or_create_customer', {
           p_name: customerName.trim() || null,
           p_phone: customerPhone.trim() || null
@@ -1098,6 +1128,15 @@ function formatHumanReadableError(errorMsg: string): string {
         }
         finalCustomerId = custData.customer.id;
         setResolvedCustomerId(finalCustomerId);
+      }
+
+      // 1b. If Tax is applied and GSTIN provided, persist to customer record for future autofill
+      if (finalCustomerId && gstApplied && customerGstin.trim()) {
+        const cleanGstin = customerGstin.toUpperCase().replace(/[^0-9A-Z]/g, '').trim();
+        await supabase
+          .from('customers')
+          .update({ gstin: cleanGstin, updated_at: new Date().toISOString() })
+          .eq('id', finalCustomerId);
       }
 
       // 2. Validate Packaged Sets & Payment Rules
@@ -1806,6 +1845,9 @@ function formatHumanReadableError(errorMsg: string): string {
                       setCustomerName(e.target.value);
                       setResolvedCustomerId(null);
                       setCustomerCredit(0);
+                      if (!e.target.value.trim() && !customerPhone.trim()) {
+                        setCustomerGstin('');
+                      }
                       if (paymentMethod === 'STORE_CREDIT') setPaymentMethod('CASH');
                       if (paymentMethod === 'SPLIT') {
                         setSplitCredit('');
@@ -1829,6 +1871,9 @@ function formatHumanReadableError(errorMsg: string): string {
                       if (!trimmed) {
                         setResolvedCustomerId(null);
                         setCustomerCredit(0);
+                        if (!customerName.trim()) {
+                          setCustomerGstin('');
+                        }
                         if (paymentMethod === 'STORE_CREDIT' || paymentMethod === 'SPLIT') {
                           setPaymentMethod('CASH');
                           setSplitCredit('');
@@ -1842,6 +1887,7 @@ function formatHumanReadableError(errorMsg: string): string {
                         if (!customerName.trim()) {
                           setCustomerName(matched.name);
                         }
+                        setCustomerGstin(matched.gstin || '');
                         setCustomerCredit(Number(matched.credit_balance || 0));
                       } else {
                         setResolvedCustomerId(null);
@@ -1857,6 +1903,18 @@ function formatHumanReadableError(errorMsg: string): string {
                     className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[14px] focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                   />
 
+                  {gstApplied && (
+                    <input 
+                      type="text" 
+                      placeholder="Customer GSTIN (e.g. 29AAAAA0000A1Z5)" 
+                      value={customerGstin} 
+                      disabled={loading || isInitialLoadingInvoice}
+                      maxLength={15}
+                      onChange={e => setCustomerGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''))}
+                      className="w-full p-2.5 bg-surface border border-border rounded-[8px] text-[14px] font-mono uppercase focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                    />
+                  )}
+
                   {showCustomerDropdown && customerSuggestions.length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-[8px] shadow-lg max-h-48 overflow-y-auto z-50 divide-y divide-border">
                       {customerSuggestions.map(cust => (
@@ -1867,7 +1925,10 @@ function formatHumanReadableError(errorMsg: string): string {
                         >
                           <div>
                             <p className="font-bold text-[13px] text-ink-primary">{cust.name}</p>
-                            <p className="text-[11px] text-ink-muted">{cust.phone || 'No phone'}</p>
+                            <p className="text-[11px] text-ink-muted">
+                              {cust.phone || 'No phone'}
+                              {cust.gstin ? ` • GSTIN: ${cust.gstin}` : ''}
+                            </p>
                           </div>
                           <div className="flex flex-col items-end gap-1">
                             {Number(cust.credit_balance || 0) > 0 && (
