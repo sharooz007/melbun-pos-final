@@ -36,6 +36,7 @@ check-rls.js
 
 # vercel
 .vercel
+.wrangler
 
 # typescript
 *.tsbuildinfo

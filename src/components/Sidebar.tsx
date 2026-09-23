@@ -53,7 +53,7 @@ export default function Sidebar() {
     return () => window.removeEventListener('toggle-mobile-menu', handler);
   }, []);
 
-  if (pathname === '/pos' || pathname === '/login') return null;
+  if (pathname === '/login') return null;
 
   return (
     <>
